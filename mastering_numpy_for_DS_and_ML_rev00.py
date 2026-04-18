@@ -1,0 +1,237 @@
+#
+# TITLE: high performance computing with python numpy
+# AUTHOR: Hyunseung Yoo
+# PURPOSE: 
+# REVISION: 
+# REFERENCE: mastering numpy for data science and machine learning (M. J. Maxell, 2025)
+#
+
+
+import numpy as np
+import time
+from typing import Optional, Tuple
+
+
+#
+# CH 1: Getting Started with Numpy
+#
+
+if False:
+    
+    # verify installation version
+    print(np.__version__)
+
+    # native python list CPU time = 6.43e-1sec @Lenovo M70q i5-10400T 6-CPUs (2020)
+    nat_list = list( range(10_000_000) )
+    start_time = time.time()
+    sum(x*x for x in nat_list)
+    end_time = time.time()
+    print('Native python list CPU time = %.2e' % (end_time - start_time) )
+
+    # numpy array CPU time = 3.81e-2sec @Lenovo M70q i5-10400T 6-CPUs (2020)
+    np_array = np.arange(10_000_000)
+    start_time = time.time()
+    np.sum(np_array*np_array)
+    end_time = time.time()
+    print('Numpy array CPU time = %.2e' % (end_time - start_time) )
+
+    # numpy array a (2 rows x 3 columns)
+    a = np.array( [ [1,2,3], [4,5,6] ])
+    print('Numpy array a shape:', a.shape)
+    print('Numpy array a ndim:', a.ndim)
+    print('Numpy array a size:', a.size)
+    print('Numpy array a dtype:', a.dtype)
+    print('Numpy array a itemsize:', a.itemsize, 'bytes')
+
+    # numpy array creation
+    array_1 = np.array( [1,2,3] )               # from list
+    array_2 = np.array( (1,2,3), float )        # from tuple, specify dtype
+    array_3 = np.zeros( (3, 4) )                # 3x4 matrix of zeros
+    array_4 = np.ones( 5 )                      # vector of ones
+    array_5 = np.full( (2, 3), 7 )              # filled with constant
+    array_6 = np.eye(4)                         # 4 x 4 identity matrix
+    array_7 = np.arange(0, 10, 2)               # start, stop, step
+    array_8 = np.linspace(0, 1, 5)              # start, stop, num
+
+    # random number API
+    rng = np.random.default_rng(seed=42)
+    rng.integers(0, 10, size=(2,3))             
+    rng.normal(loc=0, scale=1, size=10)         # standard normal
+    
+    # data type
+    ints16 = np.array( [1, 2, 3], dtype=np.int16)
+    floats32 = np.array( [1.0, 2.0, 3.0], dtype=np.float32)
+    print(ints16.dtype, floats32.dtype)
+    print(ints16.itemsize, 'bytes', floats32.itemsize, 'bytes')
+
+    # type conversion
+    array = np.array([1.0, 2.0, 3.0])
+    ints = array.astype(np.int32)
+    print(array.dtype, array.itemsize, 'bytes')
+    print(ints.dtype, ints.itemsize, 'bytes')
+
+    # operation, upcasting automatically
+    array_add = np.array([1,2,3]) + np.array([1.5])
+    print(array_add, array_add.dtype, array_add.itemsize)
+
+    # indexing and slicing
+    v = np.arange(10)
+    print(v[0], v[-1], v[2:7:2], v.dtype, v.itemsize)
+    m = np.arange(12).reshape(3,4)
+    print(m[1,2], m[0:2, 1:4], m[:,0])
+    sub = m[0:2, 1:3].copy()
+    sub[0,0] = 99
+    print(m, sub)
+
+    # Boolean masks
+    mask = m % 2 == 0
+    print(m, mask, m[mask])
+    m[m<5] = -1
+    print(m)
+
+    # Fancy indexing
+    rows = np.array([0, 2])
+    cols = np.array([1, 3])
+    print(m, m[rows, cols])
+    print(m, m[rows[:,None], cols])
+
+    # pulling it all together
+    rng = np.random.default_rng(seed=123)
+    data = rng.normal(loc=50, scale=15, size=(6,6)).astype(np.float32)
+    mean_val = data.mean()
+    high = data[data>mean_val]
+    print(f'dataset mean: {mean_val:.2f}')
+    print(f'values above mean: {high}')
+    print(f'high-value mean: {high.mean():.2f}')
+
+
+
+#
+# CH 2: Core Array Operations
+#
+
+if True:
+
+    # element-wise arithmetics
+    a = np.array([2, 4, 6])
+    b = np.array([1, 3, 5])
+    print(' a = ', a, a.dtype, ' b = ', b, b.dtype)
+    print(' a + b = ', a + b)
+    print(' a - b = ', a - b)
+    print(' a * b = ', a * b)
+    print(' a / b = ', a / b)
+    print(' a + 10 = ', a + 10)
+    print(' a * 0.5 = ', a * 0.5)
+    
+
+#
+# CH 14: Linear Regression from Scratch
+#
+
+class LinearRegressionGD:
+
+    def __init__(self,
+                 lr: float = 1e-2,
+                 n_epochs: int = 1000,
+                 batch_size: Optional[int] = None,  # None -> full-batch, 1 -> SGD, -1 -> mini-batch
+                 alpha: float = 0.0,                # L2 regularization strength (Ridge)
+                 fit_intercept: bool = True,
+                 tol: float = 1e-6,
+                 shuffle: bool = True,
+                 verbose: bool = False,
+                 rng: Optional[np.random.Generator] = None,):
+
+        # input parameters
+        self.lr = lr
+        self.n_epochs = n_epochs
+        self.batch_size = batch_size
+        self.alpha = alpha
+        self.fit_intercept = fit_intercept
+        self.tol = tol
+        self.shuffle = shuffle
+        self.verbose = verbose
+        self.rng = rng or np.random.default_rng(0)
+
+        #
+        self.coef_ = None   # includes intercept if fit_intercept = True
+        self.loss_history = []
+
+
+    def _add_bias(self,
+                  X: np.ndarray) -> np.ndarray:
+        #
+        if not self.fit_intercept:
+            return X
+
+        #
+        ones = np.ones((X.shape[0], 1), dtype=X.dtype)
+        return np.concatenate([ones, X], axis=1)
+
+
+    def _regularization_term(self,
+                             w: np.ndarray) -> np.ndarray:
+        # return vector to add to gradient for L2 penalty
+        if self.alpha == 0.0:
+            return 0.0
+        
+        if not self.fit_intercept:
+            return (self.alpha / X.shape[0]) * w
+
+        # do not regularize the intercept (first element)
+        reg = (self.alpha / X.shape[0]) * w.copy()
+        reg[0] = 0.0
+        return reg
+
+
+    def fit(self,
+            X: np.ndarray,
+            y: np.ndarray) -> 'LinearRegressionGD':
+
+        X = np.asarray(X, dtype=float)
+        y = np.asarray(y, dtype=float).reshape(-1)
+
+        n, p = X.shape
+        Xb = self._add_bias(X)  # shape (n, p+1) if intercept, else (n, p)
+        m = Xb.shape[1]         # init weights (small random or zeros)
+
+        self.coef_ = np.zeros(m, dtype=float)
+
+        # set default batch_size
+        if self.batch_size is None:
+            batch_size = n      # full-batch
+        else:
+            batch_size = int(self.batch_size)
+
+        #
+        for epoch in range(self.n_epochs):
+            #
+            if self.shuffle:
+                perm = self.rng.permutation(n)
+                Xb = Xb[perm]
+                y = y[perm]
+
+            epoch_loss = 0.0
+
+            for i in range(0, n, batch_size):
+                xb = Xb[i:i+batch_size]
+                yb = y[i:i+batch_size]
+                pred = xb @ self.coef_      # (batch, )
+                err = pred - yb             # (batch, )
+                grad = (xb.T @ err) / xb.shape[0]   # (m,)
+
+                # add L2 regularization (do not regularize intercept)
+                if self.alpha != 0.0:
+                    reg = (self.alpha / n) * self.coef_.copy()
+                    if self.fit_intercept:
+                        reg[0] = 0.0
+                    grad += reg
+
+                # gradient step
+                self.coef_ = self.coef_ - self.lr * grad
+
+                # accumulate loss (for monitoring)
+                epoch_loss += 0.5 * (err**2).sum()
+
+            epoch_loss / n
+
+
