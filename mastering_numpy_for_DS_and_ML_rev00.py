@@ -222,6 +222,67 @@ if True:
     print(b)
     r[0] = 99
     print(b)
+
+    # transposing, axis moves
+    t = b.T
+    print(np.shares_memory(b, t))
+    swapped = np.swapaxes(b, 0, 1)
+    print(b)
+    print(swapped)
+    print(np.shares_memory(b, swapped))
+    moved = np.moveaxis(b, 0, -1)
+    print(b)
+    print(moved)
+    print(np.shares_memory(b, moved))
+    print(b.strides, t.strides)
+    safe = np.ascontiguousarray(t)              # C-contiguous memory
+    print(b.strides, t.strides, safe.strides)
+
+    # concatenating, splitting, and stacking
+    A = np.arange(6).reshape(2,3)
+    B = np.arange(6, 12).reshape(2,3)
+    print(A)
+    print(B)
+    rows = np.concatenate([A, B], axis=0)
+    print(rows)
+    cols = np.concatenate([A, B], axis=1)
+    print(cols)
+    stacked = np.stack([A, B], axis=0)
+    print(stacked)
+    print(stacked.shape)
+
+    vstack = np.vstack([A, B])
+    hstack = np.hstack([A, B])
+    cstack = np.column_stack([A, B])
+    print(vstack)
+    print(hstack)
+    print(cstack)
+
+    X = np.arange(12).reshape(3,4)
+    rows = np.split(X, 3, axis=0)
+    print(rows)
+    cols = np.split(X, 4, axis=1)
+    print(cols)
+
+    sensor1 = np.random.rand(1000, 5)
+    sensor2 = np.random.rand(1000, 3)
+    X = np.hstack([sensor1, sensor2])
+    print(sensor1[0], sensor2[0], X[0])
+    print(np.shares_memory(sensor1, X))
+
+    # broadcasting rules and patterns
+    M = np.arange(6).reshape(2, 3)
+    print(M.dtype, M.itemsize)
+    v = np.array([10, 20, 30])          # row vector
+    print(M + v)
+    col = np.array([1,2])[:,None]       # column vector
+    print(M + col)
+
+    a = np.arange(3)[:, None]           # column vector
+    b = np.arange(4)[None, :]           # row vector
+    grid = a + b
+    print(grid.shape)
+    print(grid)
     
     
 
@@ -334,6 +395,7 @@ class LinearRegressionGD:
                 epoch_loss += 0.5 * (err**2).sum()
 
             epoch_loss / n
+
 
 
 
