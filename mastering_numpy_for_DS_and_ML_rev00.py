@@ -110,7 +110,7 @@ if False:
 # CH 2: Core Array Operations
 #
 
-if True:
+if False:
 
     # element-wise arithmetics
     a = np.array([2, 4, 6])
@@ -122,6 +122,107 @@ if True:
     print(' a / b = ', a / b)
     print(' a + 10 = ', a + 10)
     print(' a * 0.5 = ', a * 0.5)
+
+    # broadcasting
+    mat = np.arange(6).reshape(2, 3)
+    vec = np.array([10, 20, 30])
+    print(mat)
+    print(vec)
+    print(mat+vec)
+
+    # universal functions (ufuncs)
+    x = np.linspace(0, 2*np.pi, 6)
+    print('x:', x)
+    print('sin(x):', np.sin(x))
+    print('exp(x):', np.exp(x))
+    print('sqrt(x):', np.sqrt(x))
+
+    u = np.array([1,2,3])
+    v = np.array([4,5,6])
+    print(np.maximum(u, v))
+    print(np.power(u, v))
+    
+    res = np.empty_like(u)
+    print(res)
+    np.add(u, v, out=res)       # in-place computation
+    print(u, v, res)
+    
+    result = np.sin(x)**2 + np.cos(x)**2
+    print(result)
+
+    def triple(x):
+        return 3*x
+    triple_vec = np.vectorize(triple)       # improving readability, not give the full C-level speed
+    print(triple_vec([1,2,3]))
+
+    # reductions and aggregations
+    rng = np.random.default_rng(seed=42)
+    data = rng.normal(size=(4,5))
+    print('total sum:', data.sum())
+    print('mean of all elements:', data.mean())
+    print('column means:', data.mean(axis=0))
+    print('row means:', data.mean(axis=1))
+
+    print('std. dev. by cols:', data.std(axis=0))
+    print('cum. sum by rows:', data.cumsum(axis=1))
+    print(data)
+
+    z_scores = ( data - data.mean(axis=0) ) / data.std(axis=0)
+    print(data)
+    print(data.mean(axis=0))
+    print(z_scores)
+
+    # comparisons and Boolean masks
+    array = np.array([ [1,5,3],
+                       [7,2,9] ])
+    mask = array > 4
+    print(mask)
+
+    print('values > 4:', array[ mask ])
+    array[mask] = 0
+    print('after masking:', array)
+
+    cond = (array % 2 == 0) | (array == 1)
+    print('even or equal to 1:', array[cond])
+
+    positive_mean = array[array>0].mean()
+    print('mean of pos. entries:', positive_mean)
+
+    rows = np.array([0, 1])
+    cols = np.array([1, 2])
+    print(rows[:,None])                     # column vector
+    print(array[rows[:,None],cols])
+
+
+
+#
+# CH 3: Shape and data management
+#
+
+if True:
+
+    # reshaping, transposing, and flattening
+    a = np.arange(12)
+    print(a.shape)
+    b = a.reshape(3, 4)
+    print(b)
+    col = a.reshape(12, -1)
+    row = a.reshape(-1, 12)
+    print(col)
+    print(row)
+    print(np.shares_memory(a, b))           # check memory status
+    print(np.shares_memory(a, col))         # check memory status
+    print(np.shares_memory(a, row))         # check memory status
+
+    # flattening, raveling
+    f = b.flatten()
+    print(np.shares_memory(b, f))           # check memory status
+    r = b.ravel()
+    print(np.shares_memory(b, r))           # check memory status
+    print(b)
+    r[0] = 99
+    print(b)
+    
     
 
 #
@@ -233,5 +334,9 @@ class LinearRegressionGD:
                 epoch_loss += 0.5 * (err**2).sum()
 
             epoch_loss / n
+
+
+
+
 
 
