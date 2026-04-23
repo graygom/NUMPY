@@ -199,7 +199,7 @@ if False:
 # CH 3: Shape and data management
 #
 
-if True:
+if False:
 
     # reshaping, transposing, and flattening
     a = np.arange(12)
@@ -315,6 +315,31 @@ if True:
     mm[:] = np.random.rand(10000, 1000)
     print(mm.nbytes/1e6, 'MB')
     mm.flush()
+
+
+
+#
+# CH 4: Input and output
+#
+
+if True:
+
+    # reading and writing text and binary files
+    X = np.random.default_rng(seed=0).normal(size=(1000,1000))
+    np.save('X.npy', X)     # write compressed metadata + raw binary
+    X_loaded = np.load('X.npy', allow_pickle=False)     # allow_pickle=False for safety
+    print(X_loaded.shape, X_loaded.dtype, X_loaded.nbytes/1e6, 'MB')
+
+    y = np.arange(1000)
+    np.savez('dataset.npz', X=X, y=y)   # uncompressed .npz
+    np.savez_compressed('dataset_compressed.npz', X=X, y=y)     # compressed
+    data = np.load('dataset.npz')
+    X2 = data['X']
+    y2 = data['y']
+    print(np.shares_memory(X2, data['X']), np.shares_memory(y2, data['y']))
+
+
+
     
 
 #
