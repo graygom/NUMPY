@@ -283,7 +283,38 @@ if True:
     grid = a + b
     print(grid.shape)
     print(grid)
-    
+
+    A = np.random.rand(5, 3)
+    B = np.random.rand(4, 3)
+    diff = A[:, None, :] - B[None, :, :]
+    dist = np.sqrt((diff**2).sum(axis=2))
+    print(A)
+    print(B)
+    print(diff)
+    print(dist)
+
+    # views vs. copies and memory considerations
+    x = np.arange(9)
+    s = x[::3]
+    print(np.shares_memory(x, s))
+
+    m = np.arange(6).reshape(2, 3)
+    print(m.strides)                    # bytes to move along each axis
+
+    if not m.flags['C_CONTIGUOUS']:
+        m = np.ascontiguousarray(m)     # non-contiguous arrays may force hidden copies when passed to C/Fortran code
+
+    big = np.ones((1_000_000,), dtype=np.float64)
+    print(big.nbytes / 1e6, 'MB')
+
+    array = np.ones(5)
+    array *= 3.0            # in-place operations
+    print(array)
+
+    mm = np.memmap('data.at', dtype='float32', mode='w+', shape=(10000, 1000))
+    mm[:] = np.random.rand(10000, 1000)
+    print(mm.nbytes/1e6, 'MB')
+    mm.flush()
     
 
 #
@@ -395,6 +426,10 @@ class LinearRegressionGD:
                 epoch_loss += 0.5 * (err**2).sum()
 
             epoch_loss / n
+
+
+
+
 
 
 
