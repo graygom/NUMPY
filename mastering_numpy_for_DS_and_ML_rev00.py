@@ -338,7 +338,91 @@ if True:
     y2 = data['y']
     print(np.shares_memory(X2, data['X']), np.shares_memory(y2, data['y']))
 
+    A = np.array([[1.234, 2.3456],[3.456, 4.4567]])
+    np.savetxt('A.csv', A, delimiter=',', header='c1,c2', comments='', fmt='%.4f')       # text formatting
+    B = np.loadtxt('A.csv', delimiter=',', skiprows=1)
+    print(B)
 
+    data = np.genfromtxt('missing_data.txt', delimiter=',', dtype=float, filling_values=np.nan)
+    print(data)
+
+    array = np.arange(12, dtype=np.int32)
+    array.tofile('raw.bin')
+    array2 = np.fromfile('raw.bin', dtype=np.int32).reshape(3, 4)
+    print(array2)
+
+    import tempfile, os
+    def atomic_save_npy(array, filename):
+        dirn = os.path.dirname(filename) or '.'
+        with tempfile.NamedTemporaryFile(dir=dirn, delete=False) as tmp:
+            np.save(tmp, array)
+            tmpname = tmp.name
+        os.replace(tmpname, filename)   # atomic on most OS
+
+    # working with memory-mapped files
+    shape = (10000, 1000)   # 10 million elements
+    filename = 'big_array.dat'
+    mm = np.memmap(filename, dtype='float32', mode='w+', shape=shape)   # write a block (only that block touches memory)
+    mm[:1000] = np.random.rand(1000, shape[1]).astype('float32')
+    mm.flush()  # ensure data is written to disk
+    del mm      # close view
+    mm_r = np.memmap(filename, dtype='float32', mode='r', shape=shape)  # read a small slice; only the necessary pages are loaded
+    block = mm_r[500:1500, 10:20]
+    print(block.shape)
+    np.save('X.npy', np.random.rand(2000, 1000).astype('float32'))
+    X_mem = np.load('X.npy', mmap_mode='r')     # read-only memmap
+
+    #with np.load('X.npy', mmap_mode='r') as X_mem:
+    for i in range(0, X_mem.shape[0], 100):
+        chunk = X_mem[i:i+100]      # small subset fits in RAM
+
+    # interfacing with CSV, JSON, and HDF5
+    array = np.loadtxt('simple.csv', delimiter=',')
+    print(array)
+    import pandas as pd
+    df = pd.read_csv('large.csv', \
+                     dtype={'id':int, 'values':float}, \
+                     parse_dates=['ts'], \
+                     usecols={'id','values','ts'})
+    X = df[['values']].to_numpy()
+    print(X)
+    print(X.shape)
+    
+    import json
+    array=np.array([1,2,3], dtype=np.int64)
+    payload = {'data':array.tolist(), 'meta':{'shape':array.shape}}
+    with open('data.json', 'w', encoding='utf-8') as f:
+        json.dump(payload, f)
+    with open('data.json', 'r', encoding='utf-8') as f:
+        data = json.load(f)
+    array2 = np.array(data['data'])
+    print(array2)
+
+    class NumpyEncoder(json.JSONEncoder):
+        def default(self, obj):
+            if isinstance(obj, (np.integer, np.floating)):
+                return obj.item()
+            if isinstance(obj, np.ndarray):
+                return obj.tolist()
+            return super().default(obj)
+    with open('data2.json', 'w', encoding='utf-8') as f:
+        json.dump({'array':array}, f, cls=NumpyEncoder)
+
+    import h5py
+    X = np.random.rand(10000,100)
+    y = np.random.randint(0, 2, size=(10000,))
+    with h5py.File('data.h5', 'w') as f:
+        # create dataset with gzip compression and chunking
+        dX = f.create_dataset('X', data=X, compression='gzip', chunks=(1000, 100))
+        dy = f.create_dataset('y', data=y)
+        f.attrs['created_by'] = 'M. J. Maxwell'
+        f.attrs['description'] = 'Feature Matrix'
+
+    with h5py.File('data.h5', 'r') as f:
+        X_slice = f['X'][100:200]
+
+    print(X_slice)
+    
 
     
 
@@ -451,6 +535,8 @@ class LinearRegressionGD:
                 epoch_loss += 0.5 * (err**2).sum()
 
             epoch_loss / n
+
+
 
 
 
