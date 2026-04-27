@@ -422,7 +422,29 @@ if True:
         X_slice = f['X'][100:200]
 
     print(X_slice)
-    
+
+    import pandas as pd
+    import numpy as np
+    import h5py
+    import time
+    csv_file = 'large.csv'
+    h5_file = 'processed.h5'
+    with h5py.File(h5_file, 'w') as hf:
+        # create empty dataset with maxshape tp allow appending along axis=0
+        dX = hf.create_dataset('X', shape=(0,100), maxshape=(None, 100), dtype='float32', compression='gzip', chunks=(1000,100))
+    chunksize = 10_000
+    for chunk in pd.read_csv(csv_file, chunksize=chunksize):
+        X_chunk = chunk.drop(columns=['id','values']).to_numpy(dtype=np.float32)
+        # preprocess
+        X_chunk = (X_chunk - X_chunk.mean(axis=0)) / \
+                  (X_chunk.std(axis=0) + 1e-8)
+        # append to HDF5
+        with h5py.File(h5_file, 'a') as hf:
+            dX = hf['X']
+            old_n = dX.shape[0]
+            new_n = old_n + X_chunk.shape[0]
+            dX.resize((new_n, dX.shape[1]))
+            dX[old_n:new_n, :] = X_chunk
 
     
 
