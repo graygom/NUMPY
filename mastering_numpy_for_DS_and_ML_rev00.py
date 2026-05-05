@@ -854,7 +854,7 @@ if False:
 # CH 6: Random numbers and statistics
 #
 
-if True:
+if False:
     # randomness and statistics are central to data science: sampling, simulation, boostrapping, hypothesis check, Monte-Carlo methods,
     # and simple descriptive analytics all rely on generating and summarizing random data correctly and efficiently
     # NumPy provides a modern, fast random API and a compact set of statistical primitives that are the backbone for many workflows
@@ -1152,8 +1152,41 @@ if True:
     # with Numpy
     # in the next chapters we'll apply these tools to feature engineering, model preprocessing, and building a simple linear-regression model from
     # scratch
-    
 
+
+
+#
+# CH 7: Data cleaning and feature engineering
+#
+
+if True:
+    # cleaning and feature engineering turn raw data into something a model can learn from
+    # good preprocessing is often what seperates a working prototype form a reliable pipelines
+    # in this chapter we cover practical NumPy techniques for handling missing or invalid values, and building end-to-end NumPy pipelines
+    # you can apply to real datasets
+    # you'll get carefully commented, runnable examples and guidance on the trade-offs you'll face in production
+
+    # 7.1 handling missing or invalid data
+    # missing data shows up in many forms: NaNs in float arrays, sentinel values(e.g., -999), or empty strings in CSVs
+    # the general workflow is (1) detect, (2) characterized (how much/where), (3) decide strategy (drop/impute/mask),
+    # (4) apy consistently (fit on training data, apply to test)
+
+    # detecting missing values
+    # for true numeric NaNs use np.isnan
+    # for sentinel values detect equality
+    import numpy as np
+    rng = np.random.default_rng(seed=0)
+    # example dataset (5 rows, 3 features)
+    X = rng.normal(size=(5,3))
+    X[1,0] = np.nan         # insert a missing data
+    X[3,2] = np.nan
+    print(X)
+    nan_mask = np.isnan(X)
+    print(nan_mask)
+    print(nan_mask.any(axis=0))     # any NaNs per column
+    print(nan_mask.sum(axis=0))     # counts per column
+    # if your missing values are encoded as -999 or empty strings from CSV,
+    # convert them to np.nan first so you can use the same APIs
     
 #
 # CH 14: Linear Regression from Scratch
@@ -1264,6 +1297,8 @@ class LinearRegressionGD:
                 epoch_loss += 0.5 * (err**2).sum()
 
             epoch_loss / n
+
+
 
 
 
