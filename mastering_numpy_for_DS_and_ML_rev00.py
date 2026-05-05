@@ -1015,9 +1015,144 @@ if True:
     # histrograms, bins, and densities
     # np.histogram is the basic buliding block for empirical distributions
     vals, edges = np.histogram(x, bins=20, density=False)  # probabilies per bin when density=True
-    print(len(vals), len(edges))
+    print(len(x), len(vals), len(edges))
+    print(x)
     print(vals)
     print(edges)
+    if False:
+        import matplotlib.pyplot as plt
+        plt.plot((edges[1:]+edges[:-1])/2.0, vals, 'o-')
+        plt.show()
+    # for integer counts and weighted histogram, np.bincount is extremely efficient
+    labels = np.array([0,1,2,1,0,2,2])
+    counts = np.bincount(labels)
+    print(labels)
+    print(counts)
+    # weighted counts
+    weights = np.array([1.0,0.5,1.2,1.0,0.8,1.0,0.5])
+    weighted = np.bincount(labels, weights=weights)
+    print(weights)
+    print(weighted)
+    # np.digitize maps values to bin indices (useful for bucketing features)
+    bins = np.array([0, 10, 20, 50])
+    indices = np.digitize([5,15,30], bins)  # returns bin indices
+    print(bins)
+    print(indices)
+
+    # covariance and correlation
+    # np.cov and np.corrcoef compute covariance and Pearson correlations
+    # pay attention to the rowvar argument: default is rowvar=True (each row is a variable)
+    X = rng.normal(size=(100, 3))       # 100 observations, 3 features
+    cov = np.cov(X, rowvar=False)       # shape (3,3)
+    print(cov)
+    corr = np.corrcoef(X, rowvar=False)
+    print(corr)
+    # if you want the sample covariance matrix with unbiased estimator (division by N-1),
+    # np.cov already does that by default(bias=False)
+
+    # weighted averages
+    # use up.average to compute weighted means
+    vals = np.array([1.0, 2.0, 3.0])
+    weights = np.array([0.2, 0.3, 0.5])
+    wmean = np.average(vals, weights=weights)
+    print(wmean, vals.mean())
+    # to get weighted variance, compute weighted average of squared deviations (or use specialized routines in other libraries)
+
+    # correlation of time series (rolling windows)
+    # NumPy provides building blocks (np.convolve, np.lib.stride_tricks.sliding_window_view) to build rolling statistics,
+    # but for complex rolling functionality prefer pandas
+    # still, a simple rolling mean using stride tricks
+    from numpy.lib.stride_tricks import sliding_window_view
+    data = rng.normal(size=100)
+    windowed = sliding_window_view(data, window_shape=5)
+    rolling_mean = windowed.mean(axis=1)    # length 96
+    if False:
+        import matplotlib.pyplot as plt
+        plt.plot(data)
+        plt.plot(rolling_mean)
+        plt.show()
+    # sliding_window_view returns a view (cheap), but be mindful of memory because it creates an array with an extra dimension
+
+    # resampling and permutation tests
+    # permutation tests are simple to implement with rng.permutation
+    # example: test whether two samples have different means under the nul hypothesis by shuffling labels
+    def permutation_test(a, b, n_perm=10000):
+        rng = np.random.default_rng(seed=0)
+        observed = a.mean() - b.mean()
+        pooled = np.concatenate([a, b])
+        count = 0
+        for _ in range(n_perm):
+            perm = rng.permutation(pooled)
+            a_p = perm[:len(a)]
+            b_p = perm[len(a):]
+            if (a_p.mean() - b_p.mean()) >= observed:
+                count += 1
+        pvalue = (count+1) / (n_perm+1)
+        return pvalue
+    pvalue = permutation_test(a=np.arange(100), b=np.arange(200))
+    # for speed, vectorize the permutations in blocks (but be careful with memory)
+
+    # practical examples & patterns
+    # 1. reproducible train/test split
+    rng = np.random.default_rng(seed=1)
+    n = 500
+    idx = rng.permutation(n)
+    train_idx, val_idx = idx[:400], idx[400:450]
+
+    # 2. stratified sampling (class proportions preserved)
+    # use np.unique with return_inverse or rely on scikit-learn's train_test_split(..., stratify=...)
+    # with NumPy
+    labels = rng.integers(0, 3, size=200)
+    unique, inv = np.unique(labels, return_inverse=True)
+    train_idx = []
+    for cls in unique:
+        cls_idx = np.where(labels == cls)[0]
+        k = int(0.8*len(cls_idx))
+        chosen = rng.choice(cls_idx, size=k, replace=False)
+        train_idx.append(chosen)
+    train_idx = np.concatenate(train_idx)
+    print(len(train_idx))
+    print(labels)
+
+    # 3. bootstrap for estimator variability
+    # shown earlier; useful for non-parametric CI and small sample inference
+
+    # 4. Monte Carlo integration
+    # estimate expected value E[f(x)] by sampling
+    def monte_carlo_expectation(rng, f, n=100_000):
+        x = rng.random(n)
+        return f(x).mean()
+
+    # pitfalls, numerical caveats, and best practices
+    # randomness & determinism: for unit tests, set explicit seeds
+    # for production simulations, be aware of reproducibility requirements and document seeds or use SeedSequence hierarchies
+    # legacy API differences: np.random.seed() and global functions differ from Generator
+    # avoid mixing unless you understand the consequences
+    # memory footprint during vectorized sampling: drawing a size=(100_000_000,) array will allocated memory accordingly
+    # use chunking if necessary
+    # precision and accumulation: when summing very large arrays, numerical error accumulate
+    # use dtype promotion and np.sum(..., dtype=np.float64) if summing many float32s
+    # for extreme accuracy consider math.fsum or compensated summation algorithm
+    # interperting std and var: be default NumPy uses population formulas (ddof=0)
+    # use ddof=1 for sample estimates when appropriate
+    # use SciPy for inference: for t-tests, skewness, kurtosis, p-value, and advanced fitting
+    # use scipy.stats rather than implementing from scratch
+
+    # key takeaways
+    # use np.random.default_rng() and the Generator API for modern, reproducible randomness
+    # seed with SeedSequence and spawn child sequences for independent parallel streams
+    # prefer vectorized sampling (single size cell) and chunk stream if memory is limited
+    # familiarize yourself with the most used distributions: random, integers, uniform, normal, binomial, poisson, multivariate_normal
+    # use NumPy's statistical functions (mean, std, median, percentile, cov, corrcoef, histrogram, bincount) for fast descriptive analytics
+    # use SciPy for advanced inference
+    # for real-world pipelines, combine Pandas (for robust CSV/IO and group operations) with NumPy for heavy numeric work
+    # always be explicit about ddof, dtype, nan-handling, and seed choices to avoid subtle bugs
+
+    # this chapter equips you to generate random data, build reproducible experiments, and compute key descriptive statistics directly and efficiently
+    # with Numpy
+    # in the next chapters we'll apply these tools to feature engineering, model preprocessing, and building a simple linear-regression model from
+    # scratch
+    
 
     
 #
@@ -1129,6 +1264,10 @@ class LinearRegressionGD:
                 epoch_loss += 0.5 * (err**2).sum()
 
             epoch_loss / n
+
+
+
+
 
 
 
