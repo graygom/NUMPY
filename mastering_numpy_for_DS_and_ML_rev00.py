@@ -600,7 +600,7 @@ if False:
 # CH 5: Linear algebra essentials
 #
 
-if True:
+if False:
     # linear algebra is the language of data science
     # from ordinary least squares to principal-component analysis, the building blocks are vectors and matrices and operations you perform on them
     # this chapter gives you practical, hand-on coverage of the most useful linear-algebra tools in NumPy
@@ -709,6 +709,315 @@ if True:
     print(coeffs, residuals, rank, s)
     # lstsq solves the normal equations with SVD internally (more stable than forming ATAA^TA directly)
     # use rcond=None with NumPy > 1.14 to get default machine-precision behavior
+
+    # underdetermined systems and pseudoinverse
+    # for fewer equations than unknowns, the Moore-Penrose pseudoinverse gives a minimum-norm solution
+    A = rng.normal(size=(3,5))      # underdetermined
+    b = rng.normal(size=(3,))
+    x_pinv = np.linalg.pinv(A) @ b
+    # np.linalg.pinv uses SVD and is numerically robust but more expensive than solve for square systems
+
+    # practical workflow
+    # if A is squre and well-conditioned -> use np.linalg.solve
+    # if A is tall (overdetermined) -> use np.linalg.lstsq
+    # if A is fat (underdetermined) -> use np.linalg.pinv or add constrains/regularization
+    # for very large or sparse systems, use scipy.sparse.linalg iterative solvers (CG, GMRES) - they handle sparsity and scale better
+
+    # worked example: linear regression
+    # solve for coefficients in ordinary least squares with normal equations vs lstsq
+    # data matrix X (n, p) and target y (n,)
+    n, p = 200, 10
+    X = rng.normal(size=(n,p))
+    y = X @ np.arange(1, p+1) + rng.normal(scale=0.1, size=n)   # synthetic linear signal
+    # using lstsq (recommend)
+    coeffs_ls ,_ ,_ ,_ = np.linalg.lstsq(X, y, rcond=None)
+    print(coeffs_ls)
+    # using normal equations (less stabke)
+    XtX = X.T @ X
+    Xty = X.T @ y
+    coeffs_normal = np.linalg.solve(XtX, Xty)   # okay when XtX is well-conditioned
+    print(coeffs_normal)
+    print('||coeffs_ls - coeffs_normal|| = ', np.linalg.norm(coeffs_ls - coeffs_normal))
+    # in many practical cases lstsq is robust and involves fewer pitfalls
+
+    # 5.3 eigenvalues, eigenvectors, and SVD
+    # spectral decompositions reveal structure: modes, principal directions, and the effective rank of your matrices
+    # they are fundamental to PCA (Principal Component Analysis), dimensionality reduction, and numerical analysis
+
+    # eigenvalues, eigenvectors
+    # for a square matrix A, eigenpairs (lambda, v) satisfy Av = lambda v
+    M = np.array([[2., 0.],
+                  [0., 3.]])
+    w, v = np.linalg.eig(M)     # w: eigenvalues, v: columns are eigenvectors
+    print(w, v)
+
+    # symmetric/Hermitian matrices
+    # if A is symmetric (real) or Hermitian (complex), prefer np.linalg.eigh
+    # it's faster and yields real eigenvalues with orthonormal eigenvectors
+    S = np.array([[4., 1.],
+                  [1., 3.]])
+    w_sym, v_sym = np.linalg.eigh(S)
+    # verify reconstruction
+    recon = (v_sym * w_sym) @ v_sym.T   # equivalent to v_sym @ np.diag(W_sym) @ v_sym.T
+    print(recon)
+    # eigh is what you want for covariance matrices (used in PCA)
+
+    # SVD (Singular Value Decomposition)
+    # for any m x n matrix A, SVD factors A = U SIGMA V T A where singular value in SIGMA are nonnegative and sorted descending
+    A = rng.normal(size=(6,4))
+    U, s, Vt = np.linalg.svd(A, full_matrices=False)    # s is 1-D array of singular values
+    SIGMA = np.diag(s)
+    # reconstruction
+    A_rec = U @ SIGMA @ Vt
+    print(A)
+    print('reconstruction error:', np.linalg.norm(A-A_rec))
+
+    # uses of SVD
+    # low-rank approximation: keep top k singular values to get the best rank-k approximation (Eckart-Young theorem)
+    k = 2
+    U_k = U[:, :k]
+    s_k = s[:k]
+    Vt_k = Vt[:k, :]
+    A_k = U_k @ np.diag(s_k) @ Vt_k
+    print(A_k)
+    # this is useful for denoising and compression (image compression example commonly used)
+
+    # Pseudoinverse: SVD is used to compute the pseudoinverse robustly
+    A_pinv = Vt.T @ np.diag(1/s) @ U.T
+    # np.linalg.pinv wraps this with tolerance for small singular values
+
+    # Rank and numerical rank: small singular values indiate directions where the matrix is (nearly) singular
+    print('singular values:', s)
+    print('numerical rank (s>tol):', np.sum(s>1e-10))
+
+    # Eigen vs. SVD
+    # use eigen decomposition for square matrices where eigen-structure is meaningful (e.g., dynamic systems, spectral graph theory)
+    # use SVD for general matrices for stable computations (least-squares, pseudoinverse, low-rank approximation)
+    # SVD handles non-symmetric matrices naturally and is numerically robust
+
+    # worked example: PCA (Principal Component Analysis) via SVD (Singular Value Decomposition)
+    # PCA on centered data x
+    # X: (n_samples, n_features)
+    X = rng.normal(size=(100,5))
+    X_centered = X - X.mean(axis=0)
+    # SVD on centered data
+    U, s, Vt = np.linalg.svd(X_centered, full_matrices=False)
+    # principal components are rows of Vt
+    pcs = Vt[:2]    # top 2 principal directions
+    # projection of data onto top-2 PCs
+    proj = X_centered @ pcs.T       # shape (100,2)
+    print(proj)
+    # using SVD avoids forming the covariance X^T x explicitly and numerically preferred for high-dimensional data
+
+    # practical performance notes
+    # SVD is more expensive than solve or eigen decomposition: complexity roughly O( min(m, n) )
+    # for very large sparse matrices, use scipy.sparse.linalg.svds or randomized SVD (scikit-learn) which scale better
+    # NumPy delegates linear-algebra work to LAPACK/BLAS
+    # performance and multithreading depend on the linked implementation (MKL, OpenBLAS, etc.)
+    # for heavy linear algebra, check what BLAS your NumPy uses
+
+    # numerical example: ill-conditioned matrix and effect on solutions
+    # construct near-singular matrix
+    A = np.array([[1., 1.],
+                  [1., 1.0000001]])
+    b = np.array([2.0, 2.000000001])
+    cond = np.linalg.cond(A)
+    x = np.linalg.solve(A, b)
+    print(cond, x)
+    # small changes in b or floating errors can produce large relative changes in x
+    # large condition number warns you that solutions may be unreliable
+    # user regularization or SVD-based techniques in such cases
+
+    # personal insight
+    # I treat SVD as a diagnostic first: inspecting singular values tells me whether a problem is well-posed or whether I need to ass regularization
+    # in practice, when a nomal equation gives surprising coefficients, I run np.linalg.svd - the singular value spectrum tells
+    # the story much faster than blind debugging
+
+    # key takeaways
+    # use @ / np.matmul for marix multiplication: * is element-wise, np.einsum is powerful for custom contractions
+    # solve well-conditioned, square systems with np.linalg.solve, avoid explicit matrix inversion for solving linear systems
+    # for overdetermined (least-square) problems, use np.linalg.lstsq
+    # for underdetermined problems, consider np.linalg.pinv or regularization
+    # compute condition numbers with np.linalg.cond to judge numerical stability, large condition numbers require caution and regularization
+    # use np.linalg.eig / np.linalg.eigh to inspect eigen-structure; prefer eigh for symmetruc/Hermitian matrices
+    # use SVD (np.linalg.svd) for robust decomposition, pseudoinverse, rank estimation and low-rank approximation
+    # for very large/sparse problems, move to scipy/scikit-learn methods (sparse solvers, randomized SVD)
+    # NumPy linear algebra is fast when linked to optimized BLAS/LAPACK; for heavy workloads, verify your BLAS backend
+
+    # with these tools you can implement regression, PCA, spectral methods, and more - reliably and efficiently
+    # in the next chapter we'll look at randomness, sampling, and probability distribution,
+    # so you can build simulations, bootstrap procedures, and stochastic algorithms on top of these linear-algebra primitives
+
+
+
+#
+# CH 6: Random numbers and statistics
+#
+
+if True:
+    # randomness and statistics are central to data science: sampling, simulation, boostrapping, hypothesis check, Monte-Carlo methods,
+    # and simple descriptive analytics all rely on generating and summarizing random data correctly and efficiently
+    # NumPy provides a modern, fast random API and a compact set of statistical primitives that are the backbone for many workflows
+    # this chapter explains the modern Generator API, demonstrates the most-used probability distributions, and shows how to compute
+    # reliable descriptive statistics and simple inferential procedures with NumPy
+    # you'll get practical, copy-and-run examples and guidance about reproducibility, parallel streams, numerical stability, and performance
+
+    # 6.1 the numpy.random.Generator API
+    # NumPy's new random API (available since NumPy 1.17) centers on the Generator class
+    # it replaces the legacy RandomState with a more robust, flexible design and better seeding semantics
+    # use np.random.default_rng() to create a Generator
+    import numpy as np
+    # recommended: create a generator with a fixed seed for reproducibility
+    rng = np.random.default_rng(seed=12345)
+    # draw 4 uniform [0,1) floats
+    samples = rng.random(5)
+    print(samples)
+
+    # why prefer Generator over the legacy global functions?
+    # clear separation between generator objects (you avoid global state)
+    # better seeding and reproducibility (via SeedSequence)
+    # support for modern bit generators and parallel-safe spawning
+    # more consisent behavior for methos like choice, integers, and multivariate_normal
+
+    # seeding and reproducibility
+    # a reproducible run needs a seed
+    # the simplest pattern is:
+    rng = np.random.default_rng(seed=42)
+    # if you need reproducible independent streams (for parallel or multi-state pipelines), use SeedSequence.spawn
+    seed = np.random.SeedSequence(12345)
+    children = seed.spawn(4)    # 4 independent child seeds
+    rngs = [np.random.default_rng(s) for s in children]
+    # rngs[0], rngs[1], ... produce independent streams reproducibly
+    # this is safer than slicing a single RNG across processes or threads
+
+    # Legacy RandomState (avoid for new code)
+    # you may still encounter code using np.random.seed() or np.random.RandomState()
+    # those APIs use an older generator with different behavior
+    # for new projects, prefer default_rng
+    # if you must interoperate with legacy code, convert or isolate legacy usage
+
+    # parallel sampling patterns
+    # when running parallel jobs (multiprocessing, distributed tasks), spawn independent SeedSequence children and give each worker its own Generator
+    # avoid sharing a single Generator instance across processes
+
+    # 6.2 common probability distribution
+    # Generator exposes methods for the common distributions you'll need
+    # two important principles
+    # (1) sample vectorized (pass size), and
+    # (2) prefer built-in methods over Python loops for speed
+
+    # uniform and floats
+    rng = np.random.default_rng(seed=0)
+    u = rng.random(6)       # uniform on [0,1)
+    u2 = rng.uniform(low=-1.0, high=1.0, size=(3,4))
+    # random is equivalent to uniform(0, 1)
+
+    # integers and permutations
+    # integers replaces legacy radint
+    ints = rng.integers(low=0, high=10, size=10)    # integers in [low, high)
+    perm = rng.permutation(10)      # random permutation (shuffle indices)
+    print(ints)
+    print(perm)
+    # rng.choice supports sampling with/without replacement and weights
+    vals = np.arange(10)
+    sample = rng.choice(vals, size=4, replace=False)    # withour replacement
+    weighted = rng.choice(vals, size=5, replace=True, p=np.linspace(1,10,10)/55)
+    print(sample)
+    print(weighted)
+
+    # Gaussian (normal), binomial, Poisson, etc.
+    normal = rng.normal(loc=0.0, scale=1.0, size=(1000,))
+    binom = rng.binomial(n=10, p=0.3, size=1000)
+    poisson = rng.poisson(lam=3.5, size=1000)
+    # Generator exposes many other distributions: exponential, gamma, beta, chisquare, laplace, geometric, etc.
+
+    # multivariate normal
+    mean = np.array([0.0, 1.0])
+    cov = np.array([[1.0, 0.5],
+                    [0.5, 2.0]])
+    X = rng.multivariate_normal(mean, cov, size=500)    # shape (500, 2)
+    # be careful: covariance must be positive semi-definite
+    # if the covariance is ill-conditioned, consider adding a small diagonal jitter
+
+    # vectorized sampling and memory
+    # sampling thousands or millions of draws is fast, but be mindful of memory
+    # example to generate a huge sample in chunks
+    def large_sample(rng, total, chunk=10_000_000):
+        i = 0
+        while i < total:
+            n = min(chunk, total - i)
+            yield rng.normal(size = n)
+            i += n
+    # use chunked generation for very large Monte Carlo simulations to avoid consuming all RAM
+
+    # practical recipes
+    # train/test split (simple, reproducible)
+    n = 1000
+    rng = np.random.default_rng(seed=0)
+    perm = rng.permutation(n)
+    train_idx = perm[:800]
+    test_idx = perm[800:]
+    
+    # bootstrap confidence interval for a statistic
+    data = rng.normal(loc=10, scale=2, size=200)
+    def bootstrap_ci(data, statfunc=np.mean, n_boot=10000, alpha=0.05):
+        n = len(data)
+        boots = rng.choice(data, size=(n_boot, n), replace=True)     # (n_noot, n)
+        stats = statfunc(boots, axis=1)
+        lower = np.percentile(stats, 100*(alpha/2))
+        upper = np.percentile(stats, 100*(1-alpha/2))
+        return lower, upper
+    ci = bootstrap_ci(data)
+    print('bootstrap 95% CI for mean:', ci)
+    
+    # monte carlo estimate (pi)
+    def estimate_pi(rng, n=1_000_000):
+        x = rng.random(n)
+        y = rng.random(n)
+        inside = (x*x+y*y)<=1.0
+        return inside.sum() / n * 4.0
+    print('pi estimate:', estimate_pi(rng, 1_000_000))
+
+    # 6.3 statistical functions and descriptive analytics
+    # NumPy provides fast vectorized functions for the essentials: means, medians, variances, percentiles, histograms, correlation, and covariances
+    # for more advanced statistics (e.g., skewness, kurtosis, hypothesis tests), use scipy.stats
+    # but for everyday EDA and numeric pipelines, NumPy is often sufficient
+
+    # means, variances, and degrees of freedom
+    x = rng.normal(size=(1000,))
+    m = x.mean()        # mean
+    s = x.std(ddof=0)   # std(ddof=0)
+    s_sample = x.std(ddof=1)    # sample standard deviation (ddof=1)
+    print(m, s, s_sample)
+    # ddof (delta degrees of freedom) controls the denominator N-ddof
+    # use ddof=1 for the unbiased sample standard deviation in many statistical contexts
+    # for large N the difference is minor, but be explicit
+
+    # nan-aware statistics
+    # datasets often contain missing values
+    # NumPy offers nan-aware variants
+    x = np.array([1.0, 2.0, np.nan, 4.0])
+    m_ = np.nanmean(x)
+    md_ = np.nanmedian(x)
+    s_ = np.nanstd(x)
+    print(x, m_, md_, s_)
+    # these functions ignore np.nan values; this is often what you want for real-world data
+
+    # percentile and quantiles
+    x = rng.normal(size=(1000,))
+    q25, q50, q75 = np.percentile(x, [25, 50, 75])
+    print(q25, q50, q75)
+    q = np.quantile(x, [0.25, 0.50, 0.75])
+    print(q)
+    # be aware of interpolation options (interpolation parameter in older versions; current versions offer method choices)
+    # for deterministic unit tests, document the method used
+
+    # histrograms, bins, and densities
+    # np.histogram is the basic buliding block for empirical distributions
+    vals, edges = np.histogram(x, bins=20, density=False)  # probabilies per bin when density=True
+    print(len(vals), len(edges))
+    print(vals)
+    print(edges)
 
     
 #
@@ -820,6 +1129,9 @@ class LinearRegressionGD:
                 epoch_loss += 0.5 * (err**2).sum()
 
             epoch_loss / n
+
+
+
 
 
 
