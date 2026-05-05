@@ -322,35 +322,86 @@ if False:
 # CH 4: Input and output
 #
 
-if True:
+if False:
+    # working with data means reading from and writing to files
+    # in NumPy-level you'll encounter a variety of formats - simple text files, efficient binary blobs, memory-mapped arrays for huge datasets, and structured storage like HDF5
+    # this chapter explains the practical tools you'll use everyday, why to choose one format over another, and how to avoid common pitfalls
+    # each subsection contains complete, ready-to-run examples and small, practical recipes you can drop into a notebook
+    
+    # 4.1 reading and writing text and binary files
+    # Numpy supports multiple on-disk representations
+    # use text files for interoperability and human inspection; prefer binary formats for speed, exactness, and compactness
 
-    # reading and writing text and binary files
+    # binary: .npy and .npz (recommended for NumPy arrays)
+    # .npy stores a single array plus metadata (shape, dtype, endianness)
+    # .npz is a zip archive of .npy files (multiple arrays)
+    # these are portable, fast, and preserve dtype exactly
+    # save and load a single array with .npy
+
+    import numpy as np
     X = np.random.default_rng(seed=0).normal(size=(1000,1000))
-    np.save('X.npy', X)     # write compressed metadata + raw binary
+    # save
+    np.save('X.npy', X)                                 # write compressed metadata + raw binary
     X_loaded = np.load('X.npy', allow_pickle=False)     # allow_pickle=False for safety
     print(X_loaded.shape, X_loaded.dtype, X_loaded.nbytes/1e6, 'MB')
 
+    # save multiple arrays with .npz
+    
     y = np.arange(1000)
-    np.savez('dataset.npz', X=X, y=y)   # uncompressed .npz
+    np.savez('dataset.npz', X=X, y=y)                           # uncompressed .npz
     np.savez_compressed('dataset_compressed.npz', X=X, y=y)     # compressed
+    # load
     data = np.load('dataset.npz')
     X2 = data['X']
     y2 = data['y']
     print(np.shares_memory(X2, data['X']), np.shares_memory(y2, data['y']))
 
+    # why?
+    # .npy/.npz: fast read/write, exact dtype, ideal for intermediate steps in a pipeline
+    # use allow_pickle=False unless you intentionally saved Python objects (pickles can be unsafe from untrusted sources)
+    
+    # Text: savetxt, loadtxt, and genfromtxt (human readable)
+    # text files (CSV, TSV) are convenient for interchage and quick inspection, but they are slower and may lose dtype information
+    
+    # write a 2-D array as CSV
+    
     A = np.array([[1.234, 2.3456],[3.456, 4.4567]])
-    np.savetxt('A.csv', A, delimiter=',', header='c1,c2', comments='', fmt='%.4f')       # text formatting
-    B = np.loadtxt('A.csv', delimiter=',', skiprows=1)
+    # fmt controls text formatting
+    # comments='' prevents '#' before header
+    np.savetxt('A.csv', A, delimiter=',', header='c1,c2', comments='', fmt='%.4f')
+
+    # read a CSV (simple numeric data)
+
+    B = np.loadtxt('A.csv', delimiter=',', skiprows=1)      # skip header
     print(B)
 
+    # for files with missing values, mixed types, or irregular rows, genfromtxt is more robust
+    
     data = np.genfromtxt('missing_data.txt', delimiter=',', dtype=float, filling_values=np.nan)
     print(data)
 
+    # genfromtxt handles missing values, converters, and column names (use names=True)
+
+    # when to choose text: when interoperability or human readability matters (e.g., handoff to a collaborator who expect CSV)
+    # for large arrays or repeated I/O, prefer binary formats
+
+    # raw binary: tofile and fromfile (fast but not self-describing)
+    # tofile writes raw bytes without metadata - no shape, no dtype info - so you must manage metadata seperately
+    # user only in controlled settings when format is agreed
+    
     array = np.arange(12, dtype=np.int32)
-    array.tofile('raw.bin')
+    array.tofile('raw.bin')             # raw bytes
+    # load, specifying dtype and shape
     array2 = np.fromfile('raw.bin', dtype=np.int32).reshape(3, 4)
     print(array2)
 
+    # warning: endianness, dtype, and shape must be managed manually
+    # not recommended for general use
+
+    # practical tips for safe writes
+    # write automatically to avoid corrupted files (common when long writes or sudden process termination occur)
+    # example pattern
+    
     import tempfile, os
     def atomic_save_npy(array, filename):
         dirn = os.path.dirname(filename) or '.'
@@ -359,37 +410,89 @@ if True:
             tmpname = tmp.name
         os.replace(tmpname, filename)   # atomic on most OS
 
-    # working with memory-mapped files
+    # using os.replace ensures the file is replaced atomically on most platforms
+
+    # 4.2 working with memory-mapped files
+    # when arrays do not fit into RAM, np.memmap and memory-mapping options let you access data on disk as if it were an array, without loading everything at once
+    
+    # creating and using memmap
+    # create a memmap-backed file and write to it
+
+    # create a memmap-backed array on disk (binary format)
     shape = (10000, 1000)   # 10 million elements
     filename = 'big_array.dat'
-    mm = np.memmap(filename, dtype='float32', mode='w+', shape=shape)   # write a block (only that block touches memory)
+    mm = np.memmap(filename, dtype='float32', mode='w+', shape=shape)
+    # write a block (only that block touches memory)
     mm[:1000] = np.random.rand(1000, shape[1]).astype('float32')
     mm.flush()  # ensure data is written to disk
     del mm      # close view
-    mm_r = np.memmap(filename, dtype='float32', mode='r', shape=shape)  # read a small slice; only the necessary pages are loaded
+
+    # re-open for read-only access (does not copy into memory)
+    mm_r = np.memmap(filename, dtype='float32', mode='r', shape=shape)
+    # read a small slice; only the necessary pages are loaded
     block = mm_r[500:1500, 10:20]
     print(block.shape)
+
+    # np.load supports memory mapping of .npy files via mmap_mode
+    # save as .npy first
     np.save('X.npy', np.random.rand(2000, 1000).astype('float32'))
+    # load as memmap-like object
     X_mem = np.load('X.npy', mmap_mode='r')     # read-only memmap
 
-    #with np.load('X.npy', mmap_mode='r') as X_mem:
-    for i in range(0, X_mem.shape[0], 100):
-        chunk = X_mem[i:i+100]      # small subset fits in RAM
+    # patterns and performance
+    # sequential access of slices works well; random, widely scattered reads incur many disk seeks and are slow
+    # if you process data in blocks (streaming or batch-processing) memmap is ideal
 
-    # interfacing with CSV, JSON, and HDF5
+    # a common pattern to process a large dataset chunk-by-chunk
+    with np.load('X.npy', mmap_mode='r') as X_mem:
+        for i in range(0, X_mem.shape[0], 100):
+            chunk = X_mem[i:i+100]      # small subset fits in RAM
+            # process chunk
+
+    # concurrency
+    # multiple processes can read the same memmap concurrently
+    # concurrent writes require care: coordinate writes to avoid races (use file locks or separate output files)
+    # flush (mm.flush()) helps ensure consistency
+
+    # when to use memmap
+    # use memmap when your data exceeds available memory and you need random access to subsets
+    # for linear streaming workloads, consider chunked reads with tools like HDF5 (next section), which can offer better chunking and compression
+
+    # personal note
+    # i once processed a 120GB dataset with memmap by transforming and writing it in-place, then kept a much smaller summary array in RAM
+    # memmap saved the project from needing a distributed cluster - just careful chunking and patience
+
+    # 4.3 interfacing with CSV, JSON, and HDF5
+    # NumPy can handle CSV and JSON for straightforward cases, but for complex files (mixed types, large CSVs, rich metadata),
+    # using higher-level libraries such as Pandas or HDF5 tools is often more practical
+
+    # CSV - NumPy vs. Pandas
+    # for simple numeric CSVs, np.loadtxt or np.genfromtxt works, but for complex CSV files (mixed types, dates, millions of rows), rely on Pandas
+
+    # example using NumPy for a simple CSV
     array = np.loadtxt('simple.csv', delimiter=',')
     print(array)
+
+    # example using Pandas (recommended for robust CSV handling)
     import pandas as pd
     df = pd.read_csv('large.csv', \
                      dtype={'id':int, 'values':float}, \
                      parse_dates=['ts'], \
                      usecols={'id','values','ts'})
-    X = df[['values']].to_numpy()
+    X = df[['values']].to_numpy()   # convert to NumPy when you need raw arrays
     print(X)
     print(X.shape)
-    
+    # Pandas offers efficient parsing, dtype control, chunked reading (chunksize=), and robust handling of timezones, dates, and missing data
+
+    # JSON - exchanging structured data
+
+    # JSON is ideal for small arrays or metadata
+    # NumPy types are not JSON serializable directly (e.g., no.int64), so convert to Python scalars or lists
+
+    # write NumPy arrays to JSON
     import json
     array=np.array([1,2,3], dtype=np.int64)
+    # convert to list first
     payload = {'data':array.tolist(), 'meta':{'shape':array.shape}}
     with open('data.json', 'w', encoding='utf-8') as f:
         json.dump(payload, f)
@@ -398,6 +501,7 @@ if True:
     array2 = np.array(data['data'])
     print(array2)
 
+    # if you want to serialize numpy scalars automatically, implement a small encoder
     class NumpyEncoder(json.JSONEncoder):
         def default(self, obj):
             if isinstance(obj, (np.integer, np.floating)):
@@ -405,39 +509,68 @@ if True:
             if isinstance(obj, np.ndarray):
                 return obj.tolist()
             return super().default(obj)
-    with open('data2.json', 'w', encoding='utf-8') as f:
-        json.dump({'array':array}, f, cls=NumpyEncoder)
+    json.dump({'array':array}, f, cls=NumpyEncoder)
+    # note: JSON is not efficient for big numerical arrays - prefer binary formats for large data
 
+    # HDF5 - large, structured, portable storage
+    # HDF5 is designed for large datasets, hierarchical storage, partial reads, metadata, compression, and chunking
+    # use h5py (low-level) or tables/PyTables (higher-level)
+    # HDF5 is a superb choice for large scientific datasets
+
+    # install h5py
+    # pip install h5py
+
+    # create and read datasets with h5py
     import h5py
-    X = np.random.rand(10000,100)
+    import numpy as np
+    X = np.random.rand(10000, 100)
     y = np.random.randint(0, 2, size=(10000,))
     with h5py.File('data.h5', 'w') as f:
         # create dataset with gzip compression and chunking
         dX = f.create_dataset('X', data=X, compression='gzip', chunks=(1000, 100))
         dy = f.create_dataset('y', data=y)
+        # attach metadata
         f.attrs['created_by'] = 'M. J. Maxwell'
         f.attrs['description'] = 'Feature Matrix'
 
+    # read back a slice without loading everything
     with h5py.File('data.h5', 'r') as f:
-        X_slice = f['X'][100:200]
-
+        X_slice = f['X'][100:200]       # reads only this block
     print(X_slice)
+
+    # HDF5 advantages: partial reads, compression, hierarchical organization, metadata
+    # downsides: slightly more setup, potential probability/version issues across very different HDF5 library versions (rare in practice)
+
+    # Pandas can read/write HDF5 via pd.to_hdf/pd.read_hdf (uses PyTables), which is convenient for table-like data
+    
+    # choosing a format - practical guidance
+    #  use .npy/.npz for fast intermediate storage of NumPy arrays
+    #  use HDF5 when you have many large arrays, hierarchical data, or need partial reads and compression
+    #  use CSV for interoperability and light-weight exchange; use Pandas for robust CSV handling
+    #  use JSON for small, structured metadata or lightweight data exchange; convert arrays to lists
+    #  use memmap for out-of-core single-array workflows when you need random access
+
+    # worked examples: a small pipeline
+    #  read a large CSV in chunks with Pandas, convert to NumPy, process each chunk, and append to an HDF5 dataset
 
     import pandas as pd
     import numpy as np
     import h5py
     import time
+    
     csv_file = 'large.csv'
     h5_file = 'processed.h5'
+
+    # create HDF5 containers
     with h5py.File(h5_file, 'w') as hf:
         # create empty dataset with maxshape tp allow appending along axis=0
         dX = hf.create_dataset('X', shape=(0,100), maxshape=(None, 100), dtype='float32', compression='gzip', chunks=(1000,100))
+
     chunksize = 10_000
     for chunk in pd.read_csv(csv_file, chunksize=chunksize):
-        X_chunk = chunk.drop(columns=['id','values']).to_numpy(dtype=np.float32)
-        # preprocess
-        X_chunk = (X_chunk - X_chunk.mean(axis=0)) / \
-                  (X_chunk.std(axis=0) + 1e-8)
+        X_chunk = chunk.drop(columns=['id','ts']).to_numpy(dtype=np.float32)    # preprocess
+        # process X_chunk (normalization, feature engineering)
+        X_chunk = (X_chunk - X_chunk.mean(axis=0)) / (X_chunk.std(axis=0) + 1e-8)
         # append to HDF5
         with h5py.File(h5_file, 'a') as hf:
             dX = hf['X']
@@ -446,8 +579,138 @@ if True:
             dX.resize((new_n, dX.shape[1]))
             dX[old_n:new_n, :] = X_chunk
 
-    
+    # this pipeline is memory-efficient: Pandas reads CSV chunk-by-chunk, processing uses NumPy, and HDF5 stores results with compression
 
+    # key takeaways
+    #  .npy and .npz are the simplest, fastest, and most faithful formats for NumPy arrays; use allow_pickle=False when loading untrusted files
+    #  text format (CSV) are readable and imteroperable but slower and less precise; for robust CSV handling prefer Pandas and chunksize for large files
+    #  use np.memmap or np.load(..., mmap_mode='r') to work with arrays that exceed RAM - process in chunks for best performance
+    #  HDF5 (via h5py) is ideal for large, hierarchical datasets with partial I/O and compression; it is a common standard in scientific computing
+    #  tofile/fromfile are raw, fast binary options but are not self-describing - use only in controlled contexts
+    #  prefer atomic writes (write-to-temp + os.replace) to avoid corrupted files during long writes
+    #  always be mindful of endianness, dtype, and memory layout when exchanging files across system of libraries
+
+    # with the I/O tools in this chapter you can build robust pipelines that scale from small experiments to datasets that exceed your laptop's memory
+    # in the next part we'll apply these techniques to practical data-science workflows - linear algebra, random sampling, and feature engineering
+    # using the I/O patterns you've just learned
+
+
+
+#
+# CH 5: Linear algebra essentials
+#
+
+if True:
+    # linear algebra is the language of data science
+    # from ordinary least squares to principal-component analysis, the building blocks are vectors and matrices and operations you perform on them
+    # this chapter gives you practical, hand-on coverage of the most useful linear-algebra tools in NumPy
+    # matrix & vector operations, reliable methods of solving linear systems, and spectral decompositions (eigenvalues/eigenvectors and SVD)
+    # you'll get working code samples, numerical caveats and advice for real projects
+
+    # 5.1 matrix and vector operations
+    # NumPy makes matrix arithmetic concise and fast
+    # the important distiction to keep in mind is element-wise as linear-algebra (matrix) operations
+
+    # create small matrices and vectors experiment
+    import numpy as np
+    np.set_printoptions(precision=4, suppress=True)
+    A = np.array([[1., 2., 3.],
+                  [4., 5., 6.]])    # shape (2,3)
+    B = np.array([[7., 8.],
+                  [9., 10.],
+                  [11., 12.]])      # shape (3,2)
+    u = np.array([1., 2., 3.])      # shape (3,)
+    v = np.array([4., 5.])          # shape (2,)
+
+    # matrix multiplication
+    # use the @ operator (or np.matmul) for true matrix multiplication
+    C = A @ B       # shape (2,2)
+    # equivalent to np.matmul(A, B) or np.dot(A, B) for 2-D arrays
+
+    # element-wise multiply
+    # the * operator multiplies element-wise and requires matching shapes (or broadcastable shapes)
+    # element-wise multiply - shape must match
+    D = A * A       # shape (2,3), element-wise square
+
+    # matrix-vector product
+    y = A @ u       # result shape (2,)
+    # equivalent to np.dot(A, u)
+
+    # outer product
+    # use np.outer or broadcasting to compute and outer product
+    outer1 = np.outer(u, v)         # shape (3,2)
+    outer2 = u[:,None] * v[None,:]  # or with broadcasting
+    print(u)
+    print(v)
+    print(outer1)
+    print(outer2)
+
+    # transpose and conjugate transpose
+    # for real arrays, .T gives the transpose
+    # for complex arrays, .conj().T for Hermitian transpose
+    At = A.T    # shape (3.2)
+    C = np.array([3j, 2j])
+    print(C.conj().T)
+
+    # batch (stacked) matrix multiplication
+    # NumPy supports batched matrix multiplies
+    # arrays with shape (batch, m, n) multiplied by (batch, n, p) produce (batch, m, p)
+    X = np.random.rand( 10, 2, 3)       # 10 matrices (2, 3)
+    Y = np.random.rand( 10, 3, 4)       # 10 matrices (3, 4)
+    Z = X @ Y                           # shape (10, 2, 4)
+
+    # Einstein summation
+    # np.einsum expresses contractions succinctly and can sometimes be faster or clearer
+    C = np.einsum('ik,kj->ij', A, B)    # same as A @ B
+
+    # practical notes
+    # perfer @/np.matmul for linear algebra expressions; * is element-wise
+    # BLAS-backed dot/matmul calls are highly optimized - ensure NumPy is linked to a good BLAS (OpenBLAS, MKL) for heavy workloads
+    # use np.einsum for complex index multiplications or when you want fine control over memory layout and temporary arrays
+
+    # 5.2 solving linear systems
+    # a common task: solve Ax=b
+    # NumPy exposes several ways
+    # choose the right one based on problem size and numerical stability
+
+    # direct solve for square systems
+    rng = np.random.default_rng(seed=0)
+    A = rng.normal(size=(4,4))
+    b = rng.normal(size=(4,))
+    x = np.linalg.solve(A, b)   # robust direct solver (LU-based)
+    # np.linalg.solve uses LAPACK routines (LU factorization with partial pivoting) and preferable to computing x = np.linalg.inv(A) @ b
+    # inverting matrices directly is slower and numerically less stable
+
+    # why not use the inverse?
+    # compare solve vs inv
+    x_solve = np.linalg.solve(A, b)
+    x_inv   = np.linalg.inv(A) @ b
+    # they are usually close, but solve is preferred
+    print('||x_solve - x_inv||:', np.linalg.norm(x_solve-x_inv))
+    # even when the difference is small for well-conditioned matrices,
+    # solve is faster and more accurate because it reuses factorization and avoids the large intermediate the inverse
+
+    # condition number and stability
+    # the condition number tells you how sensitive solutions are to noise in A or b
+    # compute with
+    condA = np.linalg.cond(A)   # 2-norm condition number
+    print('cond(A) =', condA)
+    # large cond(A) (e.g.,>1e8) indicates potential numerical instability - solutions may be wildly inaccurate
+    # for ill-conditioned or near-singular A, consider regularization (Tukhonov/ridge) or using SVD/pseudoinverse
+    # SVD = singular value decomposition
+    print(np.__version__)
+
+    # least-squares and overdetermined systems
+    # for A with more rows than columns (overdetermined), use np.linalg.lstsq
+    # overdetermined system: more equations than unknowns
+    A = rng.normal(size=(100, 3))   # 100 samples, 3 features
+    b = rng.normal(size=(100,))
+    coeffs, residuals, rank, s = np.linalg.lstsq(A, b, rcond=None)
+    print(coeffs, residuals, rank, s)
+    # lstsq solves the normal equations with SVD internally (more stable than forming ATAA^TA directly)
+    # use rcond=None with NumPy > 1.14 to get default machine-precision behavior
+
+    
 #
 # CH 14: Linear Regression from Scratch
 #
@@ -557,6 +820,10 @@ class LinearRegressionGD:
                 epoch_loss += 0.5 * (err**2).sum()
 
             epoch_loss / n
+
+
+
+
 
 
 
