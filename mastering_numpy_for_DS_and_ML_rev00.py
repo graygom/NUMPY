@@ -1187,6 +1187,158 @@ if True:
     print(nan_mask.sum(axis=0))     # counts per column
     # if your missing values are encoded as -999 or empty strings from CSV,
     # convert them to np.nan first so you can use the same APIs
+
+    # simple imputation: column mean/median
+    # a robust, often effective choice is to replace missing feature values with the column mean or median computed from the training data
+    # always compute statistics on training data and apply to validation/test sets
+    def impute_mean(X, inplace=False):
+        X = X if inplace else X.copy()
+        col_mean = np.nanmean(X, axis=0)    # shape (n_features,)
+        inds = np.where(np.isnan(X))        # tuple (rows, cols)
+        X[inds] = col_mean[inds[1]]
+        return X, col_mean
+    X_imputed, means = impute_mean(X)
+    print(X)
+    print(X_imputed)
+    print(means)
+    # np.nanmean ignores NaN values
+    # if an entire column is NaN you'll get nan back - handle that with a fallback values (e.g., 0 or median)
+
+    # imputation bu interpolation (time series)
+    # for ordered data (time series), linear interpolation often preserves temporal structure better than global mean
+    def interp_fill(col):
+        # col: 1D numeric array with np.nan for missing
+        n = len(col)
+        idx = np.arange(n)
+        valid = np.where(~np.isnan(col))[0]
+        if valid.size == 0:
+            return np.full(n, 0.0)  # fallback
+        return np.interp(idx, valid, col[valid])
+    # apply per-column
+    X2 = X.copy()
+    for j in range(X2.shape[1]):
+        X2[:,j] = interp_fill(X2[:,j])
+    print(X)
+    print(X2)
+    # np.interp will forward/backfill endpoints with the nearest valid value
+    # for more complex time-series imputation (seasonality, AR models), use domain-specific methods or pandas
+
+    # forward-fill / backward-fill without pandas
+    # you can forward-fill (carry last observation forward) with a small NumPy trick using indicies
+    def forward_fill(col):
+        n = len(col)
+        mask = np.isnan(col)
+        idx = np.where(~mask, np.arange(n), 0)
+        # make index cumulative so each NaN points to last valid index
+        np.maximum.accumulate(idx, out=idx)
+        filled = col[idx]
+        # if leading values are NaN they will map to index 0 - handle separately
+        first_valid = np.where(~mask)[0]
+        if first_valid.size == 0:
+            return np.full(n, 0.0)
+        if first_valid[0] != 0:
+            filled[:first_valid[0]] = col[first_valid[0]]   # backfill leading NaNs
+        #
+        return filled
+    X2 = X.copy()
+    X2[0,1] = np.NaN
+    print(X2)
+    for j in range(X2.shape[1]):
+        X2[:,j] = forward_fill(X2[:,j])
+    print(X2)
+    # this method is vectorized and fast for large 1D arrays, apply per column per column for 2D
+
+    # masking and masked arrays
+    # if you perfer to keep missing values explicit, NumPy's masked arrays(np.ma) let you perform computations while ignoring masked elements
+    print(X)
+    m = np.ma.masked_invalid(X)     # masks NaN and infs
+    print(m)
+    col_mean_masked = m.mean(axis=0).data
+    # masked arrays perseve mask through many ops
+    m_filled = m.filled(fill_value=-1)
+    print(m_filled)
+    # masked arrays are handy when you need to propagate missingness through complex calculations rather than immediately filling
+
+    # dropping rows or columns
+    # if a row has many missing values and imputation is not justified, drop it
+    row_valid_counts = (~np.isnan(X)).sum(axis=1)
+    keep = row_valid_counts >= 2    # require at least 2 valid features
+    x_filtered = X[keep]
+    print(X)
+    print(row_valid_counts)
+    print(keep)
+    print(x_filtered)
+    # similarly drop columns with too many missing values
+
+    # putting it together: an imputer object (NumPy style)
+    # create a simple object that fits on training data and can transform new data
+    class SimpleImputer:
+        def __init__(self, strategy='mean', fill_value=0.0):
+            assert strategy in ('mean', 'median', 'constant')
+            self.strategy = strategy
+            self.fill_value = fill_value
+            self.statistics_ = None
+            print('SimpleImputer')
+
+        def fit(self, X):
+            if self.strategy == 'mean':
+                self.statistics_ = np.nanmean(X, axis=0)
+            elif self.strategy == 'median':
+                self.statistics_ = np.nanmedian(X, axis=0)
+            else:
+                self.statistics_ = np.full(X.shape[1], self.fill_value)
+            # fallback: replace NaN stats with fill_value
+            nan_stats = np.isnan(self.statistics_)
+            if nan_stats.any():
+                self.statistics_[nan_stats] = self.fill_value
+            #
+            print(self.statistics_)
+            return self
+
+        def transform(self, X):
+            X = X.copy()
+            inds = np.where(np.isnan(X))
+            print(inds)                     # ( row_array, col_array )
+            print(inds[1])                  # col_array
+            X[inds] = self.statistics_[inds[1]]
+            return X
+    #
+    imp = SimpleImputer(strategy='mean').fit(X)
+    X_imp = imp.transform(X)
+    print(X)
+    print(X_imp)
+    # this ensures consistent behavior and easy application to test sets
+
+    # 7.2 scaling and normalization
+    # scaling makes features comparable and speeds up optimization
+    # the two most common scalings are standardization (z-score) and min-max scaling; each has domain use cases
+
+    # why scale ?
+    # distance-base algorithms (k-NN, k-means), gradient-based optimization (neural nets), and regularization all benefit from features on similiar scales
+    # if features are already comparable (e.g., all percentiles), scaling may not be necessary
+
+    # standardization (z-score)
+    # subtract column mean and divide by column standard deviation
+    # fit on training data; apply same parameters to test
+    def standard_scale(X_train, X):
+        mean = X_train.mean(axis=0)
+        std = X_train.std(axis=0, ddof=0)
+        # avoid divide-by-zero
+        std_safe = np.where(std == 0, 1.0, std)
+        return (X - mean) / std_safe, mean, std_safe
+    # example
+    rng = np.random.default_rng(seed=0)
+    X_train = rng.normal(10, 2, size=(100,3))
+    X_test  = rng.normal(11, 3, size=(20,3))
+    X_train_scaled, mean, std = standard_scale(X_train, X_train)
+    X_test_scaled, _, _ = standard_scale(X_train, X_test)       # user X_train params
+    print(X_train_scaled.min(), X_train_scaled.max(), mean, std)
+    print(X_test_scaled.min(), X_test_scaled.max())
+    # use ddof=0 for population std (NumPy default);
+    # use ddof=1 for classical unbiased estimator when appropriate
+
+    # Min-Max scaling
+    # transforms each column to 
     
 #
 # CH 14: Linear Regression from Scratch
@@ -1297,6 +1449,7 @@ class LinearRegressionGD:
                 epoch_loss += 0.5 * (err**2).sum()
 
             epoch_loss / n
+
 
 
 
