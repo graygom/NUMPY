@@ -1338,7 +1338,59 @@ if True:
     # use ddof=1 for classical unbiased estimator when appropriate
 
     # Min-Max scaling
-    # transforms each column to 
+    # transforms each column to range [0, 1) (or [a, b])
+    def minmax_scale(X_train, X, feature_range=(0,1)):
+        X_min = X_train.min(axis=0)
+        X_max = X_train.max(axis=0)
+        scale = (X_max - X_min)
+        scale_safe = np.where(scale == 0, 1.0, scale)
+        X_std = (X - X_min) / scale_safe
+        a, b = feature_range
+        return X_std * (b - a) + a, X_min, X_max
+    # example
+    X_train_mm, Xmin, Xmax = minmax_scale(X_train, X_train)
+    X_test_mm, _, _ = minmax_scale(X_train, X_test)
+    print('min max scaling')
+    print(Xmin, Xmax)
+    print(X_train_mm)
+    # if a column is constant (max == min), decide whether to leave it zero or assign some constant (e.g.,0.5)
+
+    # Robust scaling (median and IQR)
+    # robust to outliers: center by median and scale by interquartile range (IQR)
+    def robust_scale(X_train, X):
+        med = np.median(X_train, axis=0)
+        q75 = np.percentile(X_train, 75, axis=0)
+        q25 = np.percentile(X_train, 25, axis=0)
+        iqr = q75 - q25
+        iqr_safe = np.where(iqr == 0, 1.0, iqr)
+        return (X-med) / iqr_safe, med, iqr_safe
+    # example
+    X_train_rs, X_train_rs_med, X_train_rs_iqr = robust_scale(X_train, X_train)
+    print('robust scaling')
+    print(X_train_rs_med, X_train_rs_iqr)
+
+    # row (sample) normalization: L2/L1 norms
+    # sometimes you want each row to have unit length (common in text embeddings):
+    def L2_normalize_rows(X, eps=1e-12):
+        norms = np.linalg.norm(X, axis=1, keepdims=True)
+        norms_safe = np.where(norms == 0, eps, norms)
+        return X / norms_safe
+    X_normed = L2_normalize_rows(X_train)
+    print('L2 normalization')
+    print(X_normed)
+
+    # in-place vs. out-of_place transforms
+    # in-place operations save memory: X -= mean and X /= std
+    # but if you need to keep originals, operate on copies
+    # also convert integers to floats before scaling
+    X = X.astype(np.float32, copy=False) # convert to float32 if not already
+    X -= mean
+    X /= std
+    print(X)
+
+    # scaling pipeline example:
+
+
     
 #
 # CH 14: Linear Regression from Scratch
@@ -1449,6 +1501,8 @@ class LinearRegressionGD:
                 epoch_loss += 0.5 * (err**2).sum()
 
             epoch_loss / n
+
+
 
 
 
