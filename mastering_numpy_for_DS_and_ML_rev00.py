@@ -1388,7 +1388,135 @@ if True:
     X /= std
     print(X)
 
-    # scaling pipeline example:
+    # scaling pipeline example: StandardScalar object
+    class StandardScalar:
+        def __init__(self, with_mean=True, with_std=True, dtype=np.float64):
+            self.with_mean = with_mean
+            self.with_std  = with_std
+            self.dtype     = dtype
+
+        def fit(self, X):
+            X = X.astype(self.dtype, copy=False)
+            self.mean_ = X.mean(axis=0) if self.with_mean else np.zeros(X.shape[1], dtype=self.dtype)
+            self.scale_ = X.std(axis=0, ddof=0) if self.with_std else np.ones(X.shape[1], dtype=self.dtype)
+            self.scale_[self.scale_ == 0] = 1.0
+            return self
+
+        def transform(self, X):
+            X = X.astype(self.dtype, copy=True)
+            if self.with_mean:
+                X -= self.mean_
+            if self.with_std:
+                X /= self.scale_
+            return X
+        # practical advice
+        # 1. always fit scalars on training data only
+        # 2. keep scalar parameters (mean, std, min, max) with your model for reproducible transforms
+        # 3. be mindful of dtype: use float32 for memory efficiency, float64 for high precision
+        # 4. if features are counts or sparse, consider log transforms before scaling: np.log1p(X)
+
+        # 7.3 encoding categorical features
+        # NumPy lacks the high-level label-encoding utilities that pandas and scikit-learn provide,
+        # but it can still do label encoding and one-hot encoding efficiently
+        # the typical steps are: map categories to integer labels, handle unseen categories,
+        # and decide between dense one-hot or a sparse representation
+
+        # label encoding (map category -> integer)
+        # use np.unique(return_inverse=True) to discover unique categories and map values to indicies
+        cats = np.array(['dog', 'cat', 'cat', 'bird', 'dog'])
+        unique, inverse = np.unique(cats, return_inverse=True)
+        print(cats)
+        print(unique)
+        print(inverse)
+        # inverse is the label-encoded integer array
+        # save unique as the mapping (index -> category)
+        # for transform on new data, use a dict lookup
+        mapping = {cat:i for i, cat in enumerate(unique)}
+        print(mapping)
+        def transform_labels(new_cats, mapping, unknown=-1):
+            return np.array([mapping.get(x, unknown) for x in new_cats], dtype=int)
+        test = np.array(['cat', 'fox'])
+        print(transform_labels(test, mapping))
+        # mapping with a python loop is simple and fast for moderate numbers of items;
+        # for very large arrays, vectorized approaches with np.searchsorted on sorted unique arrays can be faster
+
+        # one-hot encoding (dense)
+        # given integer labels inverse and k = len(unique), one-hot matrix is
+        k = unique.size
+        one_hot = np.eye(k, dtype=int)[inverse]     # shape (n_samples, k)
+        print(k)
+        print(one_hot)
+        # this creates a dense matrix
+        # it is fine for small cardinality
+        # for high-cardinality (e.g., thousands of categories),
+        # dense one-hot becomes expensive
+
+        # on-hot with unknowns
+        # if some items map to -1 for unknown categories, handle them explicitly
+        def one_hot_from_labels(labels, k, unknow_index=None):
+            # labels: int array with -1 for unknown
+            onehot = np.zeros((labels.size, k), dtype=int)
+            mask = labels >= 0
+            onehot[np.arange(labels.size)[mask], labels[mask]] = 1
+            if unknown_index is not None:
+                # set unknown column
+                onehot[~mask, unknown_index] = 1
+            return onehot
+
+        # frequency or target encoding (alternative to one-hot)
+        # for very high cardinality, encode categories by statistics (frequency, mean target)
+        vals, inv = np.unique(cats, return_inverse=True)
+        counts = np.bincount(inv)
+        freq = counts[inv] / counts.sum()   # frequency per sample
+        print(cats)
+        print(vals)
+        print(inv)
+        print(counts)
+        print(freq)
+        # target encoding uses average target per category (careful: risk of target leakage -
+        # fit only on training data and apply smoithing)
+
+        # hashing trick (memory-efficient, approximate)
+        # hash categories to a fixed number of bins (useful in streaming or high-cardinal contexts)
+        # example
+        def hashing_encode(strings, n_bins=256):
+            # deterministic across runs; use python's hash but take modulo
+            h = np.fromiter((hash(s) % n_bins for s in strings), dtype=np.int64)
+            return h    # then one-hot or use as categorical feature index
+        print(hashing_encode('asdfasdfasdf'))
+        # hashes are fast and memory-efficient but introduce collisions
+
+        # practical considerations
+        # preserve category-to-index mapping and include an 'unknown' bucket
+        # avoid target leakage - compute encoding on train data only
+        # for sparse or very high-cardinality features, consider sparse matrix (scipy.sparse) or hashing + embedding in models
+        # when you can, use pandas.Categorical of sklearn.preprocessing utilities for convenience and clarity
+
+        # 7.4 working with real datasets - an end-to-end numpy pipeline
+        # below is a compact but complete example that demonstrates a realistic workflow
+        # generate a synthetic mixed dataset (numerial + categorical + missing),
+        # split into train/test,
+        # fit imputation/encoding/scaling on train, transform test,
+        # and preserve parameters for later use
+        # this is intentionally implemented with pure NumPy to show the mechanics;
+        # in many real projects, combining pandas for IO and bookkeeping with NumPy for heavy numeric work is pragmatic
+        import numpy as np
+        from dataclasses import dataclass
+        rng = np.random.default_rng(seed=0)
+        # 1. create synthetic dataset
+        n_samples = 200
+        num_features = 3    # numeric features with some NaNs
+        X_num = rng.normal(loc=[10, 0, 100], scale=[2, 5, 20], size=(n_samples, num_features))
+        mask_nan = rng.random(X_num.shape) < 0.1
+        X_num[mask_nan] = np.nan
+        # 2. categorical feature
+        cats = np.array(['red', 'green', 'blue'])
+        X_cat = rng.choice(cats, size=(n_samples,))     # introduce unseen category in test set later
+        # 3. target (regression)
+        beta = np.array([1.5, -2.0, 0.01])
+        y = np.nansum(np.nan_to_num(X_num, nan=0.0) * beta, axis=1) + \
+            rng.normal(scale=1.0, size=n_samples)
+        
 
 
     
@@ -1501,6 +1629,10 @@ class LinearRegressionGD:
                 epoch_loss += 0.5 * (err**2).sum()
 
             epoch_loss / n
+
+
+
+
 
 
 
