@@ -1516,6 +1516,125 @@ if True:
         beta = np.array([1.5, -2.0, 0.01])
         y = np.nansum(np.nan_to_num(X_num, nan=0.0) * beta, axis=1) + \
             rng.normal(scale=1.0, size=n_samples)
+        # 4. train/test split (reproducible)
+        perm = rng.permutation(n_samples)
+        train_idx = perm[:150]
+        test_idx  = perm[150:]
+        X_num_train = X_num[train_idx]
+        X_num_test  = X_num[test_idx]
+        X_cat_train = X_cat[train_idx]
+        X_cat_test  = np.copy(X_cat[test_idx])
+        X_cat_test[0] = 'yellow'                    # inject unseen category in test
+        y_train = y[train_idx]
+        y_test  = y[test_idx]
+        # 5. define preprocessing components (imputer, encoder, scalar)
+        @dataclass
+        class NumPyPreprocessor:
+            imputer_strategy: str = 'mean'          # or 'median'
+            scaler: str = 'standard'                # 'minmax', 'standard', 'robust'
+            cat_unknown_token: str = '__UNK__'
+            
+            def fit(self, X_num, X_cat):
+                # imputer
+                if self.imputer_strategy == 'mean':
+                    self.imputer_stats_ = np.nanmean(X_num, axis=0)
+                else:
+                    self.imputer_stats_ = np.nanmedian(X_num, axis=0)
+                    
+                # fallback for all-NaN columns
+                nan_stats = np.isnan(self.imputer_stats_)
+                if nan_stats.any():
+                    self.imputer_stats_[nan_stats] = 0.0
+                    
+                # scalar params
+                if self.scaler == 'standard':
+                    self.scale_mean_  = np.nanmean(X_num, axis=0)
+                    self.scale_scale_ = np.nanstd(X_num, axis=0, ddof=0)
+                    self.scale_scale_[self.scale_scale_ == 0] = 1.0
+                elif self.scaler == 'minmax':
+                    self.scale_min_ = np.nanmin(X_num, axis=0)
+                    self.scale_max_ = np.nanmax(X_num, axis=0)
+                    diff = self.scale_max_ - self.scale_min_
+                    diff[diff == 0] = 1.0
+                    self.scale_min_, self.scale_max, self.scale_range_ = self.scale_min_, self.scale_max_, diff
+                else:
+                    # robust
+                    self.scale_median_ = np.nanmedian(X_num, axis=0)
+                    q75 = np.nanpercentile(X_num, 75, axis=0)
+                    q25 = np.nanpercentile(X_num, 25, axis=0)
+                    iqr = q75 - q25
+                    iqr[iqr == 0] = 1.0
+                    self.scale_median_, self.scale_iqr_ = self.scale_median, iqr
+                    
+                # categorical mapping
+                unique, inv = np.unique(X_cat, return_inverse=True)
+                self.cat_mapping_ = {cat:i for i, cat in enumerate(unique)}
+                self.cat_list_ = list(unique) + [self.cat_unknown_token]
+                self.n_cat_ = len(self.cat_list_)
+
+                return self
+
+            def transform_num(self, X_num):
+                X = X_num.copy().astype(np.float64)
+                # impute
+                inds = np.where(np.isnan(X))
+                if inds[0].size > 0:
+                    X[inds] = self.imputer_stats_[inds[1]]
+                # scale
+                if self.scaler == 'standard':
+                    X = (X - self.scale_mean_) / self.scale_scale_
+                elif self.scaler == 'minmax':
+                    X = (X - self.scale_min_) / self.scale_range_
+                else:
+                    X = (X - self.scale_median_) / self.scale_irq_
+
+                return X
+
+            def transform_cat(self, X_cat):
+                # label-encode with unknown handling
+                labels = np.full(X_cat.shape[0], -1, dtype=int)
+                for i, v in enumerate(X_cat):
+                    labels[i] = self.cat_mapping_.get(v, self.n_cat_-1)  # unknown -> last index
+                # one-hot
+                onehot = np.zeros((labels.size, self.n_cat_), dtype=np.float32)
+                mask = labels >= 0
+                onehot[np.arange(labels.size)[mask], labels[mask]] = 1.0
+
+                return onehot
+
+            def transform(self, X_num, X_cat):
+                Xn = self.transform_num(X_num)
+                Xc = self.transform_cat(X_cat)
+
+                return np.hstack([Xn, Xc])
+
+        # 6. Fit preprocessor on train, transform train/test
+        pp = NumPyPreprocessor(imputer_strategy='mean', scaler='standard').fit(X_num_train, X_cat_train)
+        X_train_prepared = pp.transform(X_num_train, X_cat_train)
+        X_test_prepared = pp.transform(X_num_test, X_cat_test)
+
+        print('Prepared train shape:', X_train_prepared.shape)
+        print('Prepared test shape:', X_test_prepared.shape)
+
+        # this example shows several best practices:
+        # fit-on-train only: imputer, scaler, and category mappings are derived from training data
+        # unknown category handling: map unseen categories to a reserved index
+        # combining numeric and categorical: numeric features after scaling and dense one-hot appended
+        # for high cardinality, prefer sparse encodings or dimensionality reduction
+        # preserve parameters: pp stores the parameters needed for transforming future data and for deployment
+
+        # saving preprocessing parameters
+        # serialize the necessary arrays (imputer_stats_, scale_mean_, scale_scale_, cat_list) using np.savez or
+        # standard file formats so the exact transformation can be reproduced in production
+
+        np.savez('preprocessor.npz', imputer_stats=pp.imputer_stats_, scale_mean=getattr(pp, 'scale_mean_', None), \
+                 scale_scale=getattr(pp, 'scale_scale_', None), cat_list=np.array(pp.cat_list_, dtype=object))
+
+
+
+
+
+                    
         
 
 
@@ -1629,6 +1748,9 @@ class LinearRegressionGD:
                 epoch_loss += 0.5 * (err**2).sum()
 
             epoch_loss / n
+
+
+
 
 
 
