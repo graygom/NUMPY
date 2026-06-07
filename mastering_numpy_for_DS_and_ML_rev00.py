@@ -1663,7 +1663,7 @@ if False:
 # CH 8: Exploratory Analysis and Visualization
 #
 
-if True:
+if False:
     # Exploratory data analysis (EDA) is the conversation you have with your dataset before you write model
     # good EDA helps you spot distributed quirks, outliers, relationships among features and items that need cleaning or transformation
     # this chapter shows how to perform quick, reproducible EDA using numpy for the computations and matplotlib for visual checks
@@ -1843,7 +1843,128 @@ if True:
     plt.show()
     # PCA projection often helps spot class separation, clusters, or outliers that were not obvious from univariate plots
         
+    # 8.3 covariance and correlation calculations
+    # covariance and correlation are the quantitative backbone of many EDA decisions
+    # covariance shows joint variability on units of the original features;
+    # correlation standardizes covariance to a dimensionless value in [-1,1][-1,1], making cross-feature comparisions straightforward
 
+    # computing covariance and correlation with NumPy
+    # use the mean-imputed X from previous section for covariance calculation
+    cov = np.cov(X, rowvar=False)   # shape (n_features, n_features)
+    corr = np.corrcoef(X, rowvar=False)
+    print('Covariance matrix:\n', cov)
+    print('Correlation matrix:\n', corr)
+    # np.cov by default uses the unbiased estimator (division by N-1)
+    # if you need the population version (divided by N), pass bias=True is older NumPy versions or adjust manually
+
+    # manual Pearson correlation (for understanding)
+    # Pearson correlation between two columns x and y can be computed directly from covariance and standard deviation:
+    def pearson_corr(x, y):
+        mask = ~np.isnan(x) & ~np.isnan(y)
+        x, y = x[mask], y[mask]
+        xm, ym = x.mean(), y.mean()
+        cov = ((x - xm) * (y - ym)).mean()  # population covariance
+        return cov / (x.std(ddof=0) * y.std(ddof=0))
+    # example
+    print('manual pearson f0 vs f3:', pearson_corr(X[:,0], X[:,3]))
+    print('matrix corr f0 vs f3:', corr[0, 3])
+    # manual computation emphasizes how correlation standardizes covariance by scale
+
+    # partial correlation (intuition)
+    # partial correlation measures association between two variables while controlling for others
+    # NumPy does not provide a direct function, but the concept is useful when multicollinearity is a concern
+    # one practical approach is to regress each variable on the control variables and compute the correlation of the residuals
+    # for complex workflows, use statsmodels
+
+    # visualizing covariance/correlation structure
+    # beyond the heatmap shown earlier, plotting the correlation of each variable with the target (if you have a numeric target) helps rank features
+    # suppose y is numeric target created earlier
+    target_corrs = [pearson_corr(X[:,j], y) for j in range(X.shape[1])]
+    for j, tx in enumerate(target_corrs):
+        print(f'correlation(feature {j}, target) = {tx:.3f}')
+    # sort features by absolute correlation for quick feature ranking
+
+    # dealing with non-linear relationships
+    # correlation measures linear association
+    # for non-linear dependencies, scatter plots, mutual information, or rank-based correlations (Spearman) are more appropriate
+    # you can compute Spearman rank correlation by ranking the arrays with np.argsort twice or use scupy.stats.spearmanr for convenience
+
+    # practical EDA workflow (short checklist)
+    # 1. inspect shape, dtypes, and missing-value counts
+    # 2. look at distributions (histograms) and robust summaries (median, IQR)
+    # 3. detect outliers (IQR and z-score), but always inspect flagged rows manually
+    # 4. check pairwise relationships with scatter plots for suspected dependencies
+    # 5. compute covariance/correlation matrices and visualize with a heatmap
+    # 6. use PCA/SVD to get a multivariate overview and to see clusters or structure
+    # 7. record findings and decide preprocessing steps (transformations, imputations, dropping columns)
+
+    # personal insight
+    # i keep a one-page EDA "intent memo" fir every dataset:
+    # main skewed features, columns with many missing values, obvious outliers, and the top-3 features correlated with the target
+    # it speeds up discussions with collaborators and prevents overfitting to transient exploratory observations
+
+    # key takeaways
+    # start EDA with concise numeric checks: shape, dtype, missing counts, mean/median/std - these reveal most immediate issues
+    # use histograms and boxplots to understand distributions and outliers; scatter plots reveal pariwise structure
+    # compute covariance and correlation matrices to quantify linear relationship; visualize them with a heatmap for quick interpretation
+    # PCA (via SVD) is a powerful diagnostic for multivariate patterns - project onto the first two components to inspect clustering or separation
+    # always filter out NaNs before plotting or compute visualizations on imputed copies only for exploration (keep imputation decisions explicit)
+    # EDA is iterative: observations from plots should feed back into preprocessing decisions
+    # (scaling, transforms, feature selection) and be documented
+
+    # in the next part of the book we'll use these EDA insights to guide feature engineering, model buliding, and the creation of evaluation
+    # pipelines - ensuring that model choices are grounded in the data's actual structure rather than assumptions
+
+
+
+#
+# CH 9: Vectorization and optimization
+#
+
+if True:
+    # speed and clarity in numerical python come from learning one central habit:
+    # think in whole-array operations, not in Python loops
+    # vectorization - using Numpy's ufuncs, broadcasting, and array-oriented idioms - moves work into C/Fortran/BLAS where it executes far faster
+    # but naive vectorization can also produce giant temporaries or excessive memory use
+    # this chapter teaches you how to remove Python-level loops, measure where the time goes,
+    # and write broadcasting patterns that are both fast and memory efficient
+    # you'll get hands-on examples, profiling recipes, and practical strategies that work in real projects
+
+    # eliminating python loops
+    # why avoid python loops?
+    # each iteration in python pays interpreter overhead; when you loop over millions of elements the interpreter becomes the bottleneck
+    # NumPy moves that work into compiled code and makes arithmetic operations run orders of magnitude faster
+
+    # a simple motivating example
+    # suppose you want to compute the square of every elememt in a large array and sum them
+    # tress approaches: python loop, list comprehension, and NumPy vectorized operations
+    import numpy as np
+    from time import perf_counter
+    n = 5_000_000
+    a = np.random.default_rng(seed=0).random(n)
+    # 1) python loop
+    t0 = perf_counter()
+    s = 0.0
+    for x in a:
+        s += x * x
+    t1 = perf_counter()
+    print('python loop time', t1-t0)
+    # 2) list comprehension + sum (faster than loop, but still python)
+    t0 = perf_counter()
+    s = sum([x*x for x in a])
+    t1 = perf_counter()
+    print('list comprehension time:', t1-t0)
+    # 3) NumPy vectorized (fastest)
+    t0 = perf_counter()
+    s = np.sum(a*a)
+    t1 = perf_counter()
+    print('NumPy vectorized time:', t1-t0)
+    # you'll typically see the vectorized version substantially faster
+    # the exact factor depends on hardware and BLAS, but the pattern is general
+
+    # replacing loops with vectorized idioms
+    # common loop -> vector patterns
+    
 
     
 #
@@ -1955,6 +2076,9 @@ class LinearRegressionGD:
                 epoch_loss += 0.5 * (err**2).sum()
 
             epoch_loss / n
+
+
+
 
 
 
