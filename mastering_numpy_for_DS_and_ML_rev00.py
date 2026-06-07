@@ -1159,7 +1159,7 @@ if False:
 # CH 7: Data cleaning and feature engineering
 #
 
-if True:
+if False:
     # cleaning and feature engineering turn raw data into something a model can learn from
     # good preprocessing is often what seperates a working prototype form a reliable pipelines
     # in this chapter we cover practical NumPy techniques for handling missing or invalid values, and building end-to-end NumPy pipelines
@@ -1630,11 +1630,218 @@ if True:
         np.savez('preprocessor.npz', imputer_stats=pp.imputer_stats_, scale_mean=getattr(pp, 'scale_mean_', None), \
                  scale_scale=getattr(pp, 'scale_scale_', None), cat_list=np.array(pp.cat_list_, dtype=object))
 
+        # real-world tips
+        # for tabular datasets, pandas make reading and initial cleaning (parsing dates, mixed types) easier;
+        # convert to NumPy for heavy numeric transforms
+        # log-transform skewed positive features (np.log1p) before scaling
+        # for streaming or very large datasets, compute running statistics (online mean/variance) or fit on a representative subset
+        # keep reproducibility: record RNG seeds when sampling, seeds for train/test splits, and transformation parameters
+
+        # key takeaways
+        # detect and treat missing values consistently - prefer computing imputation statistics on training data only
+        # user np.nanmean, np.nanmedian, or interpolation (for time series) as appropriate
+        # standardization, min-max scaling, and robust scaling each have trade-offs;
+        # choose based on algorithms and data distribution
+        # always apply scaling parameters computed on training data to validation/test sets
+        # label encoding and one-hot encoding are straightforward with np.unique and np.eye;
+        # for high-cardinality features consider frequency encoding, hashing, or sparse representation
+        # build reproducible preprocessing objects (fit/transform) in NumPy and persist the transformation parameters for deployment
+        # prefer vectorized, broadcasted operations for performance;
+        # only use python loops when necessary (e.g.,building category maps for large string sets,
+        # but even then try to vectorize using np.searchsorted or np.unique)
+        # use float32 for large datasets if precision permits,
+        # and pay attention to memory layout and contiguity when performance matters
+
+        # good preprocessing saves time and improves model stability
+        # the techniques in this chapter give you a solid, numpy-centric toolbox for turning real-world data reliable inputs for models and analyses
+        # in the next chapter we'll explore exploratory analysis and visualization patterns that
+        # help you spot data issues and validate your preprocessing choices
 
 
 
+#
+# CH 8: Exploratory Analysis and Visualization
+#
 
-                    
+if True:
+    # Exploratory data analysis (EDA) is the conversation you have with your dataset before you write model
+    # good EDA helps you spot distributed quirks, outliers, relationships among features and items that need cleaning or transformation
+    # this chapter shows how to perform quick, reproducible EDA using numpy for the computations and matplotlib for visual checks
+    # you'll get working, well-documented examples for summary statistics, distributions, outliers, pairwise relationships,
+    # and visualizing covariance/correlation structure - plus practical advice on which checks to run first and why
+
+    # 8.1 quick EDA with NumPy
+    # start with a compact summary: sized, dtypes, counts of missing values, and basic statistics
+    # those few numbers immediately tell you if something is wrong or surprising
+
+    # below is a reproducible example that creates a small realistic dataset (numerical features, a categorical label, and sime missing values)
+    # and runs a set of quick EDA checks
+    # copy-paste int0 a notebook and run each cell to explore
+
+    import numpy as np
+    rng = np.random.default_rng(seed=0)
+    # synthetic dataset: 200 samples, 4 numeric features, 1 categical label
+    n = 200
+    features = np.column_stack([rng.normal(loc=50, scale=10, size=n),       # feature 1
+                                rng.exponential(scale=5.0, size=n),         # feature 2
+                                rng.normal(loc=0, scale=1, size=n),         # feature 3
+                                rng.normal(loc=1000, scale=200, size=n)])   # feature 4
+    labels = rng.choice(['a', 'b', 'c'], size=n, p=[0.5, 0.3, 0.2])
+    # introduce some missing values (NaNs) and an outlier
+    features[rng.choice(n, size=5), rng.integers(0, 4, size=5)] = np.nan
+    features[10, 3] = 10_000.0      # large outliers in feature 3
+    # quick structure checks
+    print('shape:', features.shape)
+    print('dtype:', features.shape)
+    print('n missing per column:', np.isnan(features).sum(axis=0))
+    print(features[0,:])
+    print(np.isnan(features)[0,:])
+    # summary statistics (nan-aware)
+    col_mean = np.nanmean(features, axis=0)
+    col_median = np.nanmedian(features, axis=0)
+    col_std = np.nanstd(features, axis=0, ddof=0)
+    col_min = np.nanmin(features, axis=0)
+    col_max = np.nanmax(features, axis=0)
+    print('mean:', col_mean)
+    print('median:', col_median)
+    print('std:', col_std)
+    print('min:', col_min)
+    print('max:', col_max)
+
+    # interpreting results
+    # n missing per column tells you which columns need imputation or exclusion
+    # large differences between mean and median indicate skew (example: exponential feature)
+    # extremely large max (outlier) suggests you should inspect that row or apply a robust transform
+
+    # outlier detection (IQR and z-sore)
+    # two common, complementary approaches are IQR-based outlier detection and z-score screening
+    # IQR-based (robust)
+    q1 = np.nanpercentile(features, 25, axis=0)
+    q3 = np.nanpercentile(features, 75, axis=0)
+    iqr = q3 - q1
+    lower = q1 - 1.5 * iqr
+    upper = q3 + 1.5 * iqr
+    outlier_mask_iqr = (features < lower) | (features > upper)
+    print('IQR outliers per column:', np.nansum(outlier_mask_iqr, axis=0))
+    # z-score based
+    mean = np.nanmean(features, axis=0)
+    std = np.nanstd(features, axis=0)
+    zscore_mask = np.abs( (features - mean) / (std + 1e-12) ) > 3.0
+    print('z-score outliers per column:', np.nansum(zscore_mask, axis=0))
+    # show rows flagged by either method
+    rows_flagged = np.where( np.any( outlier_mask_iqr | zscore_mask , axis=1 ) )[0]
+    print('rows flagged as outliers (indices):', rows_flagged)
+    # user IQR for skewed features and z-score for approximately normal features
+    # both are heuristics; always inspect flagged rows before dropping them
+
+    # distribution checks (skew, kurtosis approximations)
+    # numpy doesn't have built-in skew/kurtosis;
+    # you can compute sample skewness/kurtosis with formulars or use SciPy
+    # Here's a quick skew estimator (Pearson moment):
+    # quick sample skewness (Fisher-Pearson moment coefficient)
+    def skewness(x):
+        x = x[~np.isnan(x)]
+        n = x.size
+        m = x.mean()
+        s2 = ((x-m)**2).mean()
+        s = np.sqrt(s2)
+        if s ==0 or n < 3:
+            return np.nan
+        return ((x-m)**3).mean() / (s**3)
+    skews = np.array([skewness(features[:,j]) for j in range(features.shape[1])])
+    print('skewness per column:', skews)
+    # skew helps decide on log or box-cox transformations for features like the exponential one above
+
+    # 8.2 integration with Matplotlib
+    # numbers tell a story, but visualization reveals shape
+    # Matplotlib is the standard plotting library; here we demonstrate concise, separate plots for common EDA checks -
+    # histrogram, boxplots, scatter plots and PCA (Principle Component Analysis) projection
+    # each plot is created in its own figure so you can view or save them individually
+    import matplotlib.pyplot as plt
+    # 1) histogram for a single feature (feature 1 is skewed)
+    plt.figure()
+    plt.hist(features[:,1][~np.isnan(features[:,1])], bins=40)
+    plt.title('Histrogram - feature 1 (skewed)')
+    plt.xlabel('value')
+    plt.ylabel('count')
+    plt.grid(ls=':')
+    plt.show()
+    # 2) Boxplot to inspect spread and outliers for all features
+    plt.figure()
+    plt.boxplot([features[:,j][~np.isnan(features[:,j])] for j in range(features.shape[1])], \
+                vert=True, labels=[f'f{j}' for j in range(features.shape[1])])
+    plt.title('Boxplot - all features')
+    plt.ylabel('value')
+    plt.grid(ls=':')
+    plt.show()
+    # 3) scatter plot between two features to check relationships
+    plt.figure()
+    x = features[:,0]
+    y = features[:,3]
+    mask = ~np.isnan(x) & ~np.isnan(y)
+    plt.scatter(x[mask], y[mask], alpha=0.6, s=100)
+    plt.title('scatter - feature 0 vs feature 3')
+    plt.xlabel('feature 0')
+    plt.ylabel('feature 3')
+    plt.grid(ls=':')
+    plt.show()
+    # notes for readable visuals: include axis labels, a title, and ensure missing values are filtered before plotting (as shown)
+    # use alpha to reduce overplotting ans s to control marker size
+
+    # heatmap of correlation matrix
+    # a correlation heatmap quickly reveals which features move together
+    # compute correlation matrix (rowvar=False: each column is a variable)
+    X = features.copy()
+    # replace NaNs with column mean for visualization (do not use as imputation for modeling automatically)
+    col_mean = np.nanmean(X, axis=0)
+    inds = np.where(np.isnan(X))
+    X[inds] = col_mean[inds[1]]
+    corr = np.corrcoef(X, rowvar=False)     # (4,4) matrix
+    plt.figure()
+    plt.imshow(corr, vmin=-1, vmax=1)
+    plt.title('correlation matrix (heatmap)')
+    plt.colorbar()
+    plt.xticks(np.arange(features.shape[1]), [f'f{j}' for j in range(features.shape[1])])
+    plt.yticks(np.arange(features.shape[1]), [f'f{j}' for j in range(features.shape[1])])
+    plt.show() 
+    # imputation: near +-1 indicates strong linear association:
+    # values near 0 mean weak linear association (nonlinear relationships may still exist)
+
+    # pairwise scatter-grid (selective)
+    # a full scatter matrix is many plots; often you only need a few informative pairs
+    # plot each pair in its own figure to keep things simple:
+    pairs = [(0,1), (0,2), (1,3)]
+    for i, j in pairs:
+        plt.figure()
+        xi = features[:,i]
+        xj = features[:,j]
+        mask =  ~np.isnan(xi) & ~np.isnan(xj)
+        plt.scatter(xi[mask], xj[mask], s=12, alpha=0.5)
+        plt.xlabel(f'f{i}')
+        plt.ylabel(f'f{j}')
+        plt.title(f'scatter: f{i} vs f{j}')
+        plt.grid(ls=':')
+        plt.show()
+
+    # PCA projection for a quick multivariate view
+    # project on the first two principal components to see clustering or label separations
+    # PCA via SVD on centered data (nan-handling: impute with col mean for visualization only)
+    Xc = X - X.mean(axis=0)
+    U, s, Vt = np.linalg.svd(Xc, full_matrices=False)
+    pc1, pc2 = U[:,0] * s[0], U[:,1] * s[1]     # equivalent to Xc @ Vt.T[:, :2]
+    plt.figure()
+    # color by label
+    unique_labels = np.unique(labels)
+    colors = {lab:i for i, lab in enumerate(unique_labels)}
+    for lab in unique_labels:
+        mask = labels == lab
+        plt.scatter(pc1[mask], pc2[mask], label=lab, s=20, alpha=0.7)
+    plt.xlabel('PC1')
+    plt.ylabel('PC2')
+    plt.title('PCA projection (PC1 vs PC2)')
+    plt.legend()
+    plt.show()
+    # PCA projection often helps spot class separation, clusters, or outliers that were not obvious from univariate plots
         
 
 
