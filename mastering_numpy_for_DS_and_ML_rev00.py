@@ -1964,7 +1964,42 @@ if True:
 
     # replacing loops with vectorized idioms
     # common loop -> vector patterns
+    # element-wise arithmatic: for i: b[i] = 2*a[i]  ->  b = 2*a
+    # conditional assignment: for i: if a[i] > 0: b[i] = a[i] else: b[i] = 0  ->  b = np.where(a>0, a, 0)
+    # aggregation: for i: total += arr[i]  ->  total = arr.sum()
+
+    # be careful with np.vectorize
+    # it wraps a python function to accept arrays, but it does not implement a true ufunc on C;
+    # it's convenience only and usually slower than a real ufunc
+    # prefer built-in ufuncs or np.einsum/BLAS for heavy work
+
+    # example: pairwise Euclidean distances
+    # python double loop (O(n^2d)) vs vectorized broadcasting (still O(n^2d) work, but in C):
+    # two sets of points A: n x d, B: m x d -> produce n x m pairwise distances
+    def pairwise_loops(A, B):
+        n, d = A.shape
+        m = B.shape[0]
+        D = np.empty((n,m), dtype=A.dtype)
+        for i in range(n):
+            for j in range(m):
+                D[i, j] = np.linalg.norm(A[i] - B[j])
+        return D
+    def pairwise_vectorized(A, B):
+        # broadcasting: (n,l,d) - (l,m,d) -> (n,m,d)
+        diff = A[:, None, :] - B[None, :, :]
+        return np.sqrt( (diff**2).sum(axis=2))
+    # the vectorized version is much faster for moderate n and m,
+    # but note it creates an intermediate of shape (n,m,d)
+    # for very large n and m this will blow memory
+
+    # when loops are OK (and Numba)
+    # there are cases where vectorization is awkward or causes big temperary arrays
+    # two options
+    # 1. write a tight loo but accelerate it with Numba (a JIT complier that produces machine code)
+    # example:
+    from numba import njit
     
+        
 
     
 #
@@ -2076,6 +2111,10 @@ class LinearRegressionGD:
                 epoch_loss += 0.5 * (err**2).sum()
 
             epoch_loss / n
+
+
+
+
 
 
 
