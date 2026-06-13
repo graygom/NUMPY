@@ -1921,7 +1921,7 @@ if False:
 # CH 9: Vectorization and optimization
 #
 
-if True:
+if False:
     # speed and clarity in numerical python come from learning one central habit:
     # think in whole-array operations, not in Python loops
     # vectorization - using Numpy's ufuncs, broadcasting, and array-oriented idioms - moves work into C/Fortran/BLAS where it executes far faster
@@ -1998,7 +1998,313 @@ if True:
     # 1. write a tight loo but accelerate it with Numba (a JIT complier that produces machine code)
     # example:
     from numba import njit
+    @njit
+    def pairwise_loops_numba(A, B):
+        n, d = A.shape
+        m = B.shape[0]
+        D = np.empty((n,m), A.dtype)
+        for i in range(n):
+            for j in range(m):
+                s = 0.0
+                for k in range(d):
+                    tmp = A[i,k] - B[j,k]
+                    s += tmp * tmp
+                D[i,j] = np.sqrt(s)
+        return D
+    # Numba can make loop-based code as fast as vectorized BLAS-based code while keeping memory small
+    # it's an excellent fallback for algorithms that don't map well to ufuncs
+    # 2. write an explicit blocking algorithm (explained later) to limit peak memory while staying in NumPy
+    # personal note:
+    # in my work I often start with vectorized code for clarity and correctness,
+    # then switch to blocked computation or Numba only when memory or speed profiling shows an issue
+
+    # 9.2 profiling and benchmarking(%timeit, cProfile, perf_counter)
+    # before optimizing, measure
+    # blind micro-optimizations waste time
+    # use timeit for small code snippets and cProfile for whole scripts
+
+    # Quick timing: %timeit (Jupyter)
+    # in a notebook, iPython's %timeit is the simplest way to get robust timings
+    # % timeit np.sum(a * a)
+    # % timeit runs the snippet multiple times, reporting mean and best time, and automatically selects
+    # repetitions to reduce noise
+
+    # script-friendly timing: time.perf_counter
+    # for .py scripts, use perf_counter() to measure blocks manually:
+    from time import perf_counter
+    t0 = perf_counter()
+    np.sum(a*a)
+    t1 = perf_counter()
+    print('elapsed time (s):', t1-t0)
+    # wrap repeated runs to get reliable averages
+
+    # deeper profiling: cProfile + pstats
+    # cProfile profiles at the function-call level and is best for finding hot functions across a whole run
+    import cProfile, pstats, io
+    def run():
+        # place the task you want to profile here
+        np.sum(a*a)
+    pr = cProfile.Profile()
+    pr.enable()
+    run()
+    pr.disable()
+    s = io.StringIO()
+    ps = pstats.Stats(pr, stream=s).sort_stats('cumtime')
+    ps.print_stats(50)      # top 50 entries
+    print(s.getvalue())
+    # look for:
+    # functions with large cumulative time (cumtime) -> targets for optimization
+    # frequent Python-level calls (loops, Python functions) that could be removed into arrays or compiles
+
+    # line-level profiling
+    # for deeper line-by-line timing within a function, use line_profiler (3rd party PKG) or manual micro-timings
+    # example usage (if installed):
+    # using @profile decorator (requires running 'kernprof -l script.py')
+
+    # memory profiling
+    # time is only half the picture
+    # for memory, inspect .nbytes or arrays:
+    a.nbytes      # bytes consumed by array data
+    # for runtime memory profiling use tracemalloc (standard lib) or memory_profiler (3rd party) to see allocations
+    # example tracemalloc snippet:
+    import tracemalloc
+    tracemalloc.start()
+    # code that allocates
+    snapshot = tracemalloc.take_snapshot()
+    top_stats = snapshot.statistics('lineno')
+    for stat in top_stats[:10]:
+        print(stat)
+    tracemalloc.stop()
+    # example flow: optimize pairwise distances
+    # 1. start with a correctness-focused vectorized version
+    # 2. measure with %timeit on representative data
+    # 3. profile with cProfile to see hotspots
+    # 4. if memory blowups occur, either block the computation or implement a numba-compiled loop
+
+    # 9.3 efficient broadcasting strategies
+    # broadcasting is powerful, but naive broadcasting can create large intermediate arrays (temporaries)
+    # that blow memory and kill performance
+    # learn patterns that use broadcasting safely and minimize temporaries
+
+    # use np.newaxis purposefully
+    # shape alignment often requires injecting axes with None/np.newaxis
+    # that's fine - but understand what the resulting operation does
+    A = np.random.rand(1000,3)      # (n, d)
+    v = np.array([1.0, 2.0, 3.0])   # (d,)
+    # add v to every row:
+    B = A + v   # uses broadcasting (v os treated as shape (3,) -> (1, 3) -> (n, 3))
+    # explicit:
+    B = A + v[None, :]
+    # this is memory efficient because v is not expanded into a full (n, 3) copy
+    # the broadcast is virtual for simple ufuncs
+
+    # avoid np.tile when unnecessary
+    # np.tile(v, (n,1)) create a real large array
+    # prefer broadcasting:
+    # bad: creates big copy
+    big = np.tile(v, (10000, 1))
+    # good: use broadcasting, no copy
+    res = A + v     # use broadcas
+    print(big.nbytes, res.nbytes)
+
+    # use out = to avoid temporaries
+    # many ufuncs accept an out parameter to write results into a pre-allocated array, avoiding temporary allocation
+    res = np.empty_like(A)
+    print(A.nbytes, res.nbytes)
+    np.add(A, v, out=res)   # write directly into res
+    # or in-place (if acceptable)
+    A += v
+    print(A.shape, v.shape)
+    # chaining operations like (A - mean) / std creates temporaries for (A - mean) then for division
+    # reduce temporaries:
+    # creates two temporaries
+    mean, std = A.mean(), A.std()
+    Z = ( A - mean ) / std
+    # in-place approach
+    A_minus_mean  = A - mean    # 1 temporary
+    A_minus_mean /= std         # reuse same buffer for division
+    # or:
+    # allocate out once
+    out = np.empty_like(A)
+    np.subtract(A, mean, out=out)
+    np.divide(out, std, out=out)
+
+    # use np.einsum to reduce temporaries and express complex contractions
+    # einsum can compute complex sums with fewer temporaries and often clearer intent:
+    # compute X^T X (p x p) without building intermediate large arrays:
+    # X: (n, p)
+    X = np.zeros([1000, 100])
+    XtX = np.einsum('ni,nj->ij', X, X)
+    print(XtX.shape, XtX.nbytes)
+    # this avoids forming (n, p) x (n, p) intermediate products and can be very memory-efficient
+
+    # blocked computation to control memory
+    # when an operation needs an n x m intermediate (e.g.,pairwise distances) and nxm is too large, process in blocks:
+    def pairwise_dist_blocked(A, B, block=1000):
+        n, d = A.shape
+        m = B.shape[0]
+        D = np.empty((n, m), dtype=A.dtype)
+        for i in range(0, n, block):
+            i_end = min(n, i + block)
+            Ai = A[i:i_end]     # shape (bi, d)
+            # compute distances from Ai to all B
+            # using vectorized broadcasting but only (bi, m, d)
+            diff = Ai[:, None, :] - B[None, :, :]
+            D[i:i_end] = np.sqrt((diff**2).sum(axis=2))
+            return D
+    # block size controls peak memory
+    # choosing it depends on available RAM and shape
+
+    # compute pairwise distances with algebraic trick to reduce memory
+    # squared Euclidean distance can be computed via dot products without create a (n, m, d) intermediate:
+    # || a - b ||^2 = || a ||^2 + || b ||^2 - 2 a b
+    # implement:
+    def pairwise_sqdist(A, B):
+        # A: (n, d), B: (m, d)
+        Anorm = ( A**2 ).sum(axis=1)[:, None]   # shape (n, 1)
+        Bnorm = ( B**2 ).sum(axis=1)[None, :]   # shape (1, m)
+        cross = A @ B.T     # shape (n, m)
+        return Anorm + Bnorm - 2*cross
+    # this requires allocating (n, m) for cross plus (n, m) for result, but does avoid (n, m, d) temporary
+    # if cross is still too large, compute cross in blocks
+
+    # broadcast to avoid copies: np.broadcast_to
+    # if you need a logically expanded view but don't want to allocate memory,
+    # np.broadcast_to gives a readonly broadcasted view:
+    v = np.array([1,2,3])
+    v_big = np.broadcast_to(v, (10000, 3))  # no copy, read-only view
+    # attempting to modify v_big will error; if you need writable, copy explicitly
+
+    # beware of integer/float dtypes and promotions
+    # some ufuncs promote dtypes causing extra work/copies
+    # be explicit with dtypes and convert arrays beforehand if you know the precision that suffices:
+    A = A.astype(np.float32, copy=False)
+    B = B.astype(np.float32, copy=False)
+    # float32 uses half the memory of float64 and often yields adequate performance for ML training
+
+    # strides tricks - advanced and dangerous
+    # np.lib.stride_tricks.as_stride can create clever views without copying,
+    # but misuse produces arrays that point outside the underlying buffer and lead to crashes
+    # use only when you deeply understand strides
+
+    # putting it together - worked examples
+    # goal: compute k-nearest neighbors (k-NN) distances for a dataset of size n with limited memory
+    # strategy:
+    # 1. precompute A_norms and store B (dataset) in a memmap if huge:
+    # 2. process queries in blocks to compute cross = A_block @ B.T
+    # 3. compute squared distances via Anorm + Bnorm - 2*cross
+    # 4. np.argpartition to get k smallest distances per query without full sort
+    # sketch:
+    def knn_blocked(X, queries, k=5, block=500):
+        # X: (N, d), queries: (Q, d)
+        Xnorm = (X**2).sum(axis=1)
+        Qnorm = (queries**2).sum(axis=1)
+        N = X.shape[0]
+        Q = queries.shape[0]
+        knn_idx = np.empty((Q, k), dtype=int)
+        knn_dist = np.empty((Q, k), dtype=float)
+        for i in range(0, Q, block):
+            i_end = min(Q, i+block)
+            q = queries[i:i_end]    # (b, d)
+            cross = q @ X.T         # (b, N)
+            dists = Qnorm[i:i_end, None] + Xnorm[None,:] - 2*cross  # (b, N)
+            # find k smallest per row
+            idx_part = np.argpartition(dists, kth=k-1, axis=1)[:, :k]
+            # for exact order, sort those k values
+            rows = np.arange(dists.shape[0])[:, None]
+            k_idx_sorted = idx_part[np.argsort(dists[rows, idx_part], axis=1), :]
+            knn_idx[i:i_end] = k_idx_sorted
+            knn_dist[i:i_end] = dists[rows, k_idx_sorted]
+        return knn_idx, knn_dist
+    # this approach avoids building huge (Q, N, d) intermediates
+    # and uses blocking and argpartition to keep memory and work manageable
+
+    # key takeaways
+    # think in arrays, not loops
+    # replace python iteration with ufuncs and reductions wherever possible
+    # this moves work into optimized C/BLAS
+    # measure first
+    # use %timeit in notebooks for microbenchmarks and
+    # cProfile (with pstats) for end-to-end profiling;
+    # inspect memory with .nbytes and tracemalloc
+    # avoid naive broadcasting that create huge temporaries
+    # use out= parameters, np.einsum, and blocked algorithms to reduce peak memory
+    # use np.newaxis and np.broadcast_to to express shape changes without copies
+    # avoid np.tile unless you really new a writable copy
+    # numba is a pragmatic fallback
+    # if vectorization forces impossible memory usage,
+    # a numba-compiled loop can be both memory- and time-efficient
+    # use algebric identities
+    # (e.g., norms and inner products) to reduce temporary shapes (pairwise distance trick)
+    # be mindful of dtype and contiguity
+    # float32 halves memory;
+    # contiguous arrays and an optimized BLAS backend improve compute throughput
+    # block large computations
+    # processing data in blocks is often the simplest, most robust strategy
+    # to make large O(n2) tasks tractable in limited RAM
+
+    # by mastering these vectorization and optimization patterns
+    # you'll write code that's not only fast but also maintainable and predictable
+    # in the next chapter we'll dig into memory layout and advanced indexing,
+    # giving you the tools needed to squeeze every bit of performance out of NumPy arrays
+
+
+
+#
+# CH 10: memory layout and advanced indexing
+#
+
+if True:
+    # when you reach for peak performance in NumPy,
+    # the way your arrays are laid out in memory and
+    # indexing patterns you uses often matter more than micro-optimizing arithmetic
+    # this chapter explains why stride and contiguity affect speed and safety,
+    # demonstrates advanced indexing patterns that let you express complex element selection concisely,
+    # and shows memory-efficient slicing strategies for very large arrays
+    # you'll get practrical code you can copy into a notebook,
+    # clear rules-of-thumb, and a few guarded tricks for advanced use
+
+    # 10.1 strides and contiguous arrays
+    # NumPy stores the array data as a single block of memory and uses shape + strides to map
+    # n-dimensional indices to byte offsets inside that block
+    # arr.strides gives the number of bytes to step to move one element along each axis
+    # understanding strides explains why arr.T can be instantaneous (it simply changes strides)
+    # and why some views are non-contiguous
+
+    # create a small examples to inspect shape, dtype, strides, and the formula that computes a memory offset:
+    import numpy as np
+    a = np.arange(12, dtype=np.int64)   # 1-D array: 12 elements
+    print('a:', a)
+    print('a.shape:', a.shape)
+    print('a.strides:', a.strides)      # (8,) because int64 uses 8 bytes
+    m = a.reshape(3, 4)     # shape (3, 4)
+    print('\nm\n:', m)
+    print('m.shape:', m.shape)
+    print('m.strides:', m.strides)  # (32, 8): to move one row (axis 0) move 32 bytes; one column 8 bytes
+    # a general formula to compute the byte offset of element with index (i, j, k, ...) is:
+    # offset = i * strides[0] + j * strides[1] + k * strides[2] + ...
+    # so m[1,2] maps to base + 1*32 + 2*8 = base + 48 bytes
+    # equivalent to the 6th element in row-major order
+    # C-contiguous vs F-contiguous (row-major vs column-major)
+    # matters for algorithms that iterate along a particular axis
+    # NumPy defaults to C order: rows are contiguous in memory
+    # use .flags to inspect contiguity:
+    print('m.flags:\n', m.flags)    # include 'C_CONTIGUOUS' and 'F_CONTIGUOUS' flags
     
+
+
+
+    
+
+
+
+
+
+
+
+
+
+
         
 
     
@@ -2111,7 +2417,6 @@ class LinearRegressionGD:
                 epoch_loss += 0.5 * (err**2).sum()
 
             epoch_loss / n
-
 
 
 
