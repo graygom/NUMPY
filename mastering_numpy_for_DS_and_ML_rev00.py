@@ -2553,9 +2553,301 @@ if False:
 #
 
 if True:
-    pass
-    # numpy
+    # numpy is extremely powerful, but sometimes you need more:
+    # very tight loops that NumPy can't express efficiently,
+    # GPU acceleration, or interoperability with legacy C/Fortran code and libraries
+    # this chapter covers pragmatic, production-ready paths to extend NumPy:
 
+    # 1. JIT and compiled Python (Numba, Cython) for high performance loops
+    # 2. GPU acceleration with CuPy (overview and practical notes)
+    # 3. interfacing with C and Fortran (ctypes, f2py and best practices)
+
+    # for each tool you'll see clear, working examples, reasons to pick that tool,
+    # and practical caveats that matter when you move from prototype to production
+
+    # 11.1 using Numba and Cython for speed
+    # when vectorization becomes awkward or creates huge temporaries,
+    # you can either restructure your algirithm or compile the hot loops
+    # numba and cython are the two practical choices for most users
+
+    # Numba - JIT (Just-In Time) compilation with minimal friction
+    # Numba compiles annotated python functions to machine code using LLVM (Low Level Virtual Machine)
+    # typical pattern: import numba and decorate a function with @njit (a shorthand for @numba.njit),
+    # optionally parallel=True for multi-threading
+
+    # benefits:
+    # very fast for numeric loops (close to C speeds)
+    # minimal code changes for many algorithms
+    # support @njit(parallel=True) with numba.prange for parallel loops
+
+    # limitations:
+    # supports a subset of python and numpy features
+    # first call has compilation overhead
+    # debugging compiled code can be harder
+
+    # example:
+    # pairwise squared Euclidean distances with Numba vs python loop
+    import numpy as np
+    from time import perf_counter
+    from numba import njit, prange
+    rng = np.random.default_rng(seed=1)
+    A = rng.random((1000, 64))
+    B = rng.random((1000, 64))
+    # pure python double loop (for comparison)
+    def pairwise_py(A, B):
+        n = A.shape[0]
+        m = B.shape[0]
+        D = np.empty((n, m), dtype=A.dtype)
+        for i in range(n):
+            for j in range(m):
+                s = 0.0
+                for k in range(A.shape[1]):
+                    tmp = A[i, k] - B[j, k]
+                    s += tmp * tmp
+                D[i, j] = s
+        return D
+    # numba-compiled version (single-thread)
+    @njit
+    def pairwise_numba(A, B):
+        n, m, d = A.shape[0], B.shape[0], A.shape[1]
+        D = np.empty((n, m), dtype=A.dtype)
+        for i in range(n):
+            for j in range(m):
+                s = 0.0
+                for k in range(d):
+                    tmp = A[i, k] - B[j, k]
+                    s += tmp * tmp
+                D[i, j] = s
+        return D
+    # numba parallel version
+    @njit(parallel=True, fastmath=True)
+    def pairwise_numba_parallel(A, B):
+        n, m, d = A.shape[0], B.shape[0], A.shape[1]
+        D = np.empty((n, m), dtype=A.dtype)
+        for i in range(n):
+            for j in range(m):
+                s = 0.0
+                for k in range(d):
+                    tmp = A[i, k] - B[j, k]
+                    s += tmp * tmp
+                D[i, j] = s
+        return D
+    # timing: python
+    t0 = perf_counter()
+    D_py = pairwise_py(A, B)
+    t1 = perf_counter()
+    print('pairwise_py(A, B) > time = %.6f sec' % (t1 - t0))
+    # timing: compilation happens on first call
+    t0 = perf_counter()
+    D_nb = pairwise_numba(A, B)
+    t1 = perf_counter()
+    print('pairwise_numba(A, B) > 1st time = %.6f sec' % (t1 - t0))
+    # timing: cached compiled code
+    t0 = perf_counter()
+    D_nb = pairwise_numba(A, B)
+    t1 = perf_counter()
+    print('pairwise_numba(A, B) > 2nd time = %.6f sec' % (t1 - t0))
+    t0 = perf_counter()
+    D_nb = pairwise_numba(A, B)
+    t1 = perf_counter()
+    print('pairwise_numba(A, B) > 3rd time = %.6f sec' % (t1 - t0))
+    # timing: compilation happens on first call (may be faster on multi-core)
+    t0 = perf_counter()
+    D_nb_p = pairwise_numba_parallel(A, B)
+    t1 = perf_counter()
+    print('pairwise_numba_parallel(A, B) > 1st time = %.6f sec' % (t1 - t0))
+    # timing: cached compiled code
+    t0 = perf_counter()
+    D_nb_p = pairwise_numba_parallel(A, B)
+    t1 = perf_counter()
+    print('pairwise_numba_parallel(A, B) > 2nd time = %.6f sec' % (t1 - t0))
+    t0 = perf_counter()
+    D_nb_p = pairwise_numba_parallel(A, B)
+    t1 = perf_counter()
+    print('pairwise_numba_parallel(A, B) > 3rd time = %.6f sec' % (t1 - t0))
+    # practical notes:
+    # use fastmath=True only when small floating-point reorderings are acceptable
+    # for parallel=True use prange instead of range
+    # keep input arrays contiguous (np.ascontiguousarray) and typed (float32/64) for best performance
+    # numba supports a CUDA target for writing GPU kernels (numba.cuda),
+    # but that requires a CUDA toolchain and is a different API
+
+    # Cython - static typing for compiled extensions
+    # cython compiles .pyx files to C extension
+    # it gives fine control and works well when you want to write code in a Python-like syntax
+    # but with static type annotations
+
+    # benefits:
+    # very efficient when you add types
+    # best interop with C libraries and OpenMP
+    # excellent control over the C ABI(Application Binary Interface) and memory layout
+
+    # limitations:
+    # requires a build step (compilation), packaging considerations
+    # more boilerplate (setup files), but modern pyproject workflows help
+
+    # examples:
+    # cython module to compute a row-wise squared norms
+    # save this as fastops.pyx:
+    # fastops.pyx
+    #cimport cython
+    #import numpy as np
+    #cimport numpy as np
+    #from cython.parallel import prange
+    #@cython.boundscheck(False)
+    #@cython.wraparound(False)
+    #def row_sqnorms(np.narray[np.float64_t, ndim=2] A):
+    #    cdef int n = A.shape[0]
+    #    cdef int d = A.shape[1]
+    #    cdef np.ndarray[np.float64_t, ndim=1] out = np.empty(n, dtype=np.float64)
+    #    cdef int i, k
+    #    for i in prange(n, nogil=True):
+    #        cdef double s = 0.0
+    #        for k in range(d):
+    #            s += A[i,k] * A[i,k]
+    #        out[i] = s
+    #    return out
+    # a minimal setup.py to build (traditional approach):
+    # setup.py
+    #from setuptools import setup
+    #from cython.build import cythonize
+    #import numpy as np
+    #setup(
+    #   ext_modules = cythonize('fastops.pyx', annotate=True),
+    #   include_dirs=[np.get_include()],
+    #)
+    # build in shell:
+    #python setup.py build_ext --inplace
+    # then in python:
+    #import numpy as np
+    #import fastops
+    #A = np.random.rand(5000,128).astype(np.float64)
+    #out = fastops.row_sqnorms(A)
+
+    # tips
+    # use typed memoryviews(double[:,:]) for modern Cython style
+    # turn off bounds checking and wraparound for speed
+    # use nogil=True with prange to parallelize loops;
+    # you'll need an OpenMP-capable compiler and to pass -
+    # fopenmp and link flags (Cython docs provide details)
+    # Cython is ideal when you need C-level control,
+    # call external C APIs, or packages a compiled wheel for distribution
+
+    # when to pick Numba vs Cython
+    # choose Numba if you want minimal code changes, fast iteration, and JIT compilation
+    # choose Cython when you need maximum control, interoperability with C libraries,
+    # or when building a distributable compiled extension with fine-grained optimizations
+
+    # 11.2 GPU acceleration with CuPy overview
+    # GPUs can massively accelerate array computations,
+    # especially dense linear algebra and element-wise operations with high arithmetic intensity
+    # CuPy is the most practical path for many NumPy users:
+    # it provides a NumPy-compatible API that runs on NVIDIA GPUs
+
+    # CuPy's model:
+    # replace import numpy as np with import cupy as cp
+    # allocate device arrays with cp.array, cp.zeros, or cp.asarray
+    # use the same syntax (@, ufuncs, reductions)
+    # transfer data between host and device with cp.asnumpy() and cp.asarray()
+
+    # example:
+    # simple workflow using CuPy
+    # requires a CUDA-enabled GPU and CuPy installed (matching your CUDA)
+    #import cupy as cp
+    #import numpy as np
+    # Host -> device
+    #x_cpu = np.random.rand(1_000_000).astype(np.float32)
+    #x_gpu = cp.asarray(x_cpu)  # copy to device
+    # perform heavy computation on GPU
+    #y_gpu = cp.sin(x_gpu) * cp.exp(x_gpu)  # fully on GPU
+    # synchronize and copy back
+    #y_cpu = cp.asnumpy(y_gpu)  # copy results to host
+
+    # practical considerations:
+    # transfer costs matter
+    # copying data to/from GPU is relatively expensive
+    # for small array, CPU may be faster
+    # put as much work as possible on the device before bringing data back
+    # installation
+    # CuPy provides binary wheels like cupy-cudallx matching different CUDA versions
+    # (e.g.,cupy-cuda11x), or pip install cupy for a fallback that builds from source (slow)
+    # conda packages can make installation easier for complex CUDA setups
+    # you must have a compatible NVIDIA driver + CUDA toolkit or runtime installed
+    # memory
+    # device memory is limited
+    # watch cp.cuda.runtime.memGetInfo() and
+    # use cp.cuda.memory pools for managing allocations
+    # streams and async
+    # GPU kernels are asynchronous
+    # use cp.cuda.Stream for overlapping compute and transfer;
+    # remember to synchronize(stream.synchronize() or cp.cuda.Stream.null.synchronize())
+    # when you need deterministic host-side timing
+    # 3rd-party ecosystem
+    # many linbraries(CuPy, PAPIDS, cuML, cuDF, PyTorch, TensorFlow) offer GPU-enabled tooling
+    # CuPy integrates well with CUDA libraries for linear algebra and FFTs
+    # compatibility caveat
+    # not all numpy functions are implmented in CuPy; but many common ones are
+    # for missing functionality, you can write custom CUDA kernels with CuPy's RawKernel or use Numba's CUDA
+    # minimal matrix multiply example:
+    # large matrix multiply on GPU
+    #a = cp.random.rand(5000, 5000, dtype=cp.float32)
+    #b = cp.random.rand(5000, 5000, dtype=cp.float32)
+    # time GPU operation (remember to synchronize)
+    #import time
+    #t0 = time.time()
+    #c = a @ b
+    #cp.cuda.Stream.null,synchronize()  # wait for completion
+    #t1 = time.time()
+    #print('GPU matmaul time:', t1-t0)
+
+    # guidance
+    # use GPU when you have large, compute-bound arrays and can amortize transfer overhead
+    # profile both data transfer and kernel time;
+    # CuPy includes cupy.cuda.profiler hooks and integrates with nvprof/N sight
+    # for production systems, consider mixed CPU/GPU pipelines,
+    # memory pooling, and error handling (out-of-memory conditions)
+
+    # 11.3 interfacing with C and Fortran libraries
+    # many high-performance numerical routines exist in C or Fortran
+    # calling them directly avoids reimplementing optimized algorithms and leverages battle-tested code
+
+    # passing numpy arrays to C with ctypes (simple, no build system)
+    # write a tiny C function that modifies a double array in place:
+    #/* double_inplace.c */
+    ##include <stddef.h>
+    #void double_inplace(double *arr, int n)
+    #{
+    #   for (int i = 0; i < n; i++) {
+    #       arr[i] *= 2.0l
+    #   }
+    #}
+    # compile it to a shared library:
+    #gcc -O3 -fPIC -shared double_inplace.c -o libdouble.so
+    # call it from python using ctypes
+    # import ctypes
+    # import numpy as np
+    # lib = ctypes.CDLL('./libdouble.so')
+    # lib.double_inplace.argtypes = (ctypes.POINTER(ctypes.c_double), ctypes.c_int)
+    # lib.double_inplace.restype = None
+    # a = np.arange(10, dtype=np.float64)
+    # ensure contiguous
+    # a_ct = np.ascontiguousarray(a, dtype=np.float64)
+    # ptr = a_ct.ctypes.data_as(ctypes.POINTER(ctypes.c_double))
+    # lib.double_inplace(ptr, a_ct.size)
+    # print(a_ct)
+
+    # notes:
+    # always ensure the array has the expected dtype and memory layout
+    # use np.ascontiguousarray or np.asfortranarray as required
+    # numpy.ctypeslib provides helpers for convenience
+    # for multi-dimensional array,
+    # pass a pointer and dimensions, and compute offsets in C using strides (or flatten before calling)
+
+    # Fortran vi f2py - easy way to wrap fortran code
+    # fortran remains popular for numerical code
+    # f2py complies fortran subroutines and generate python module
+    # fortran subroutine example scale_array.f90:
+    
 
 
 
