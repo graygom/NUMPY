@@ -2254,7 +2254,7 @@ if False:
 # CH 10: memory layout and advanced indexing
 #
 
-if True:
+if False:
     # when you reach for peak performance in NumPy,
     # the way your arrays are laid out in memory and
     # indexing patterns you uses often matter more than micro-optimizing arithmetic
@@ -2290,17 +2290,271 @@ if True:
     # NumPy defaults to C order: rows are contiguous in memory
     # use .flags to inspect contiguity:
     print('m.flags:\n', m.flags)    # include 'C_CONTIGUOUS' and 'F_CONTIGUOUS' flags
-    
+    # m.T (transpose) usually returns a view with changed strides but not a copy:
+    mt = m.T
+    print('mt.strides:', mt.strides)    # often (8, 32) - reversed
+    print('mt.flags:\n', mt.flags)
+    # because mt is non-contiguous in C order,
+    # passing it to some C/Fortran libraries or BLAS routine may cause NumPy to make an internal contiguous copy,
+    # which can hurt performance
+    # when calling external code, perfer to supply a contiguous buffer:
+    mt_c = np.ascontiguousarray(mt)     # explicit C-contiguous copy if needed
+    # ascontiguousarray returns the original array
+    # if it's already contiguous, otherwise it makes a copy
+
+    # practical examples and consequences
+    # 1. if you iterate over rows of a C-contiguous (n, p) array,
+    # that traversal will be cache-friendly and fast
+    # iterating over columns repeatedly is slower because elements are not contiguous in memory
+    # 2. matrix-multiply routine (BLAS) are fastest when inputs are in the expected memory order (often C-contiguous for NumPy)
+    # if you observe poor performance in A @ B, check .flags['C-CONTIGUOUS']
+    # and make ascontiguousarray calls where needed
+    # 3. slicing with a step (e.g.,a[::2]) produces a view with a stride larger than element size
+    # that's fine and cheap, but memory access will jump, which can be slower in tight loops
+
+    # negative strides and reversed arrays
+    # slicing with a negative step produces a view with a negative stride:
+    r = a[::-1]
+    print(a)
+    print(r)
+    print('r.strides:', r.strides)      # negative strides
+    # this is a view and no copy is made,
+    # but some libraries don't expect negative strides and may copy
+
+    # computing offsets manually - sanity check
+    # if you ever suspect mis-indexing, you can compute the flat index and then bytes offset:
+    i, j = 1, 2
+    flat_index = i * (m.shape[1]) + j   # only valid for C-contiguous
+    offset = i * m.strides[0] + j * m.strides[1]
+    print(i, j)
+    print(m.shape)
+    print(m.strides)
+    print(flat_index, offset)
+    # but prefer to reason with shape/strides rather than manual offset arithmetic in production code
+
+    # best practice synopsis for contiguity
+    # if your code performs heavy numeric operations or passes arrays to external libraries:
+    # check .flags['C_CONTIGUOUS'] and .flags['F_CONTIGUOUS'] when debugging performance
+    # make an explicit copy with np.ascontiguousarray(arr) or
+    # np.asfortranarray(arr) once and reuse it rather than letting internal functions copy repeatedly
+    # convert dtypes explicitly (astype(np.float32, copy=False)) to avoid unexpected copies
+
+    # 10.2 advanced indexing tricks
+    # indexing in NumPy is rich
+    # there are two fundamentally different indexing styles:
+    # basic slicing (slices, integers, :) which returns view when possible,
+    # and advanced indexing (integer arrays, boolean masks) which generally returns copies
+    # knowing whch returns a view vs a copy is crucial for correctness and memory use
+
+    # slicing (views)
+    M = np.arange(12).reshape(3,4)
+    s = M[0:2, 1:3]         # view - shares memory with M
+    s[0, 0] = 999           # modifies M
+
+    # fancy indexing (copies)
+    idx = np.array([0, 2])
+    rows = M[idx]           # not a view - this is copy
+    rows[0,0]=-1            # does not change M
+
+    # because fancy indexing returns a copy, modifications to the result don't affect the source
+    # if you want to assign into the original array using fancy indicies, assign into the original directly:
+    M[idx, 1] = 100         # write into M at rows 0 and 2, column 1
+
+    # per-row selection (very common pattern)
+    # selecting one element per row using integer indices is efficient and idiomatic
+    arr = np.array([[10, 11, 12],
+                    [20, 21, 22],
+                    [30, 31, 32]])
+    col_indices = np.array([2, 0, 1])   # one column index per row
+    selected = arr[np.arange(arr.shape[0]), col_indices]    # shape (3, )
+    print(arr)
+    print(arr.shape)
+    print(selected)
+    # this pattern is useful for selecting the predicted class per row, picking maxima, etc
+
+    # np.takg_along_axis and np.put_along_axis
+    # when you have per-row indicies and want to get or set values along a particular axis,
+    # take_along_axis and put_along_axis are modern, efficient helpers:
+    # get top-2 values per row
+    scores = np.random.rand(5, 10)
+    topk_idx = np.argpartition(scores, -2, axis=1)[:,-2:]
+    top2 = np.take_along_axis(scores, topk_idx, axis=1)     # shape (5, 2)
+    # set per-row chosen
+    np.put_along_axis(scores, topk_idx, 0.0, axis=1)
+    # these functions preserve the alignment of shapes and are preferable to clumsy broadcasting hacks
+
+    # np.ix_ for outer-product indexing
+    # if you want the cross-product of selected rows and columns
+    rows = np.array([0, 2])
+    cols = np.array([1, 3])
+    sub = M[np.ix_(rows, cols)]     # shape (2, 2) picks rows x cols in outer-product fashion
+    # np.ix_ makes intent explicit: choose these rows and these columns
+
+    # boolean masks (filtering and in-place modification)
+    # boolean masks are common and usually memory efficient:
+    mask = M % 2 == 0   # boolean array same shape as M
+    even =  M[mask]     # retuns 1-D array (copy)
+    M[mask] = -1        # in-place modify only selected entries
+    # nasty pitfall: mask.nonzero() returns tuple if arrays; usin them in fancy indexing returns a copy:
+    ri, ci = np.nonzero(mask)
+    # M[ri, ci] is a copy - modifying it does not affect M unless you assign back
+    M[ri, ci] = -2  # this *does* write back because assignment syntax targets M
+
+    # selecting top-k per row without creating full sorts
+    # argpartition is a neat performance trick:
+    # get k smaller or largest indicies without a full sort
+    k = 3
+    vals = np.random.rand(1000, 50)
+    k_small_idx = np.argpartition(vals, kth=k-1, axis=1)[:, :k]
+    k_small_vals = np.take_along_axis(vals, k_small_idx, axis=1)
+    print(k_small_vals.shape)
+    # you can then sort the small block if you need them ordered
+
+    # np.where with axis-aware broadcasting
+    # np.where(cond, x, y) is powerful for elementwise selection
+    # combined with broadcasting,
+    # you can replace elements conditionally without temporaries:
+    A = np.arange(12).reshape(3, 4)
+    result = np.where(A % 2 ==0, A, -A)     # elementwise choose positive for evens, negative for odds
+
+    # np.ndindex and np.ndenumerate - controlled, readable iteration
+    # when you must iterate but want readable index loops, np.ndindex yields multi-dimensional indices:
+    for idx in np.ndindex(A.shape):
+        print(idx, A[idx])
+    for idx, val in np.ndenumerate(A):
+        print(idx, val)
+    # np.ndenumerate yields (index, value) pairs
+
+    # as_strided - powerful and dangerous
+    # np.lib.stride_tricks.as_strided can create views with arbitrary shape/strides
+    # this can implement rolling windows without copies,
+    # but if misused you can create views that point outside the underlying array (undefined behavier)
+    # Perfer sliding_window_view if availiable
+    from numpy.lib.stride_tricks import sliding_window_view
+    x = np.arange(10)
+    windows = sliding_window_view(x, window_shape=3)    # shape (8,3) view
+    # window[i] is x[i:i+3] and is a view (no copy)
+    print(windows)
+    print(x[windows[0]].mean())
+    # sliding_window_view is safe and readable
+    # only use as_strided if you are certain about the layout and bounds
+
+    # 10.3 memory-efficient slicing for large data
+    # when data size approaches or exceeed RAM, two strategies dominate:
+    # work in views and blocks, and avoid unnecessary copies
+    # combine memmaped arrays and careful block-processing or streaming
+    # here are robust patterns
+
+    # chunked processing pattern (row by blocks)
+    # this pattern applies a function f to each block of rows and
+    # aggregate results without loading the whole matrix:
+    def process_in_blocks(X, block_rows, func, *args, **kwargs):
+        n = X.shape[0]
+        results = []
+        for i in range(0, n, block_rows):
+            block = X[i:i+block_rows]       # view (cheap)
+            res = func(block, *args, **kwargs)
+            resuts.append(res)
+        return np.concatenate(results, axis=0)  # depending on func, adjust aggregation
+    # if X is a memmap or HDF5 dataset,
+    # block = X[i:i+block_rows] reads only that chunk into memory
+
+    # compute column means by chunking
+    # a common building block:
+    # compute column means without loading full array:
+    def col_mean_chunked(filename, shape, dtype=np.float32, chunk=1000):
+        mm = np.memmap(filename, dtype=dtype, mode='r', shape=shape)
+        total = np.zeros(shape[1], dtype=np.float64)
+        count = 0
+        for i in range(0, shape[0], chunk):
+            block = mm[i:i+chunk]
+            total += np.nansum(block, axis=0)   # handle NaN if necessary
+            count += (~np.isnan(block)).sum(axis=0)
+        return total / count
+    # this uses memmap to avoid loading everything
+
+    # choosing block size
+    # block size should fit comfortably in RAM and exploit CPU cache
+    # test with a few sizes and profile memory and time;
+    # often multiples of a few megabytes work well
+
+    # avoiding copies with selection patterns
+    # if you need to compute a function that reads rows but must access columns inside the loop,
+    # prefer row-major iteration for C-contiguous arrays
+    # because per-row slices are contiguous views
+    # if you must repeatedly access columns,
+    # it can be faster to transpose once and iterate over rows of the transposed array
+    # (i.e.,columns of original), making those accesses contiguous
+    # slow: loop over columns in a C-contiguous array
+    for j in range(A.shape[1]):
+        col = A[:,j]    # this is a view but non-contiguous step-by-step access can be slow
+    # fast: transpose to make columns contiguous
+    A_T = np.ascontiguousarray(A.T)
+    for j in range(A_T.shape[0]):   # now rows of A_T are contiguous
+        row = A_T[j]
+
+    # using memmap + sliding windows (time series)
+    # for long time series stored on disk,
+    # sliding windows for feature extraction can be done with sliding_window_view
+    # applied on small blocks:
+    # mm = np.memmap('long_series.dat', dtype=np.float32, mode='r', shape=(10_000_000,))
+    # window = 128
+    # step = 64
+    # features= []
+    # for i in range(0, mm.shape[0] - window + 1, step):
+    #     w = mm[i:i+window]  # small view
+    #     feat = extract_features(w)  # small computation in RAM
+    #     features.append(feat)
+    # features = np.vstack(features)
+    # this avoids creating an enormous (n_windows, window) intermediate
+
+    # be caerful about views that look huge
+    # operation like X[:,None.:] - Y[None,:,:] create a view shapeed(n, m, d)
+    # that is virtual but will be materialized when used in arithmetic, causing memory blow-up
+    # use algebric tricks (norms + dot products) or
+    # blocked computation ot avoid this
+
+    # when you must copy - do it once
+    # if an operation requires a contiguous copy for performance,
+    # make an explicit copy once and reuse it
+    # repeated implicit copies inside tight loops are the silent performance killer
+
+    # practical debugging checklist for memory & indexing bugs
+    # 1. if performance is poor, put .strides, .flags, and .nbytes to inspect layout and memory
+    # 2. use np.share_memory(a, b) to check whethera view actually shares memory
+    # 3. when you expect a view but observe unexpected behavior,
+    # check the .base attribute (non-None if this array is a view)
+    # 4. if indexing returns unexpected copies,
+    # remember that advanced indexing (integer arrays, boolean masks) returns copies
+    # use np.where assignments or put_along_axis to write back into the original array
+
+    # key takwaways
+    # understanding memory layout and indexing choices is the fastest path from 'it works' to 'it runs well'
+    # ndarray uses shape + strides to map indices to offsets;
+    # transpose and reshaps are often views that change strides not data
+    # advanced indexing (integer arrays, boolean masks) typically returns copies -
+    # know when to expect a view vs a copy
+    # for very large arrays, prcess in blocks, prefer memmap or chunked I/O,
+    # and broadcasting patterns that temporarily materialize enormous arrays
+    # use np.ascontiguousarray where external libraries expect C order,
+    # and favor sliding_window_view over manual as_strided for rolling-window operations
+    # finally, when performance surprises you,
+    # inspect .strides, .flags, .nbytes, and use micro-benchmarks to guide optimizations rather than guessing
+
+    # when these techniques you'll avoid many subtle bugs, reduce memory pressure,
+    # and write NumPy code that hehaves predictably at scale
+    # in the next chapter we'll look at ways to extend NumPy with compiled code and accelerators
+    # - numba, cython, and quick tour of GPU options
 
 
 
-    
+#
+# CH 11: extending numpy
+#
 
-
-
-
-
-
+if True:
+    pass
+    # numpy
 
 
 
@@ -2417,33 +2671,6 @@ class LinearRegressionGD:
                 epoch_loss += 0.5 * (err**2).sum()
 
             epoch_loss / n
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
 
 
