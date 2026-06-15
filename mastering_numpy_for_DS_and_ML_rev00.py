@@ -2552,7 +2552,7 @@ if False:
 # CH 11: extending numpy
 #
 
-if True:
+if False:
     # numpy is extremely powerful, but sometimes you need more:
     # very tight loops that NumPy can't express efficiently,
     # GPU acceleration, or interoperability with legacy C/Fortran code and libraries
@@ -2930,6 +2930,17 @@ if True:
     # start with the simplest effective tool (often numba),
     # measure carefully, and escalate to custom C/Fortran or GPU implementations
     # when the performance gains justify the added build and maintenance costs
+
+
+
+#
+# CH 12: working with the wider ecosystem
+#
+
+if False:
+    pass
+    # NumPy is the foundation - but most real-world data work happens in an ecosystem of libraries built on top of or around NumPy
+
 
 
 
