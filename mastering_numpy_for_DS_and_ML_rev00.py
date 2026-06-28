@@ -2937,7 +2937,7 @@ if False:
 # CH 12: working with the wider ecosystem
 #
 
-if True:
+if False:
     # NumPy is the foundation - but most real-world data work happens in an ecosystem of libraries built on top of or around NumPy
     # in this chapter we'll walk through practical, hands-on patterns for working with
     # Pandas, SciPy, and the major machine-learning framework (scikit-learn, TensorFlow, PyTorch)
@@ -3247,125 +3247,551 @@ if True:
 
 
 
+#
+# CH 13: machine learning preprocessing
+#
 
+if False:
+    # good preprocessing is the scaffolding of successful machine learning
+    # a careful, reproducible preprocessing pipeline prevents data leakage, stabilizes training, and makes models portable into production
+    # in this chapter we cover three pragmatic topics you'll apply immediately:
+
+    # 13.1 train/test splits and shuffling - reproducible, stratified, and fold-based splitting using Numpy
+    # 13.2 feature-scaling pipelines - robust, test-safe fit/transform objects you can persist
+    # 13.3 dimensionality reduction with Numpy - PCA (SVD-based), explained variance, and memory-efficient PCA for large data
+    # you'll get clear, runnable code for each task, step-by-step explainations, and practical tips from real projects
+
+    # 13.1 train/test splits and shuffling
+    # splitting data correctly is deceptively important
+    # common mistakes include:
+    # (a) shuffling after splitting,
+    # (b) leaking information from validation into training when computing statistics, and
+    # (c) non-reproducible splits
+    # here are reproducible, numpy-only patterns for simple random splits, stratified splits, and K-fold cross-validation
+
+    # deterministic random splits
+    # always use a Generator for reproducible randomness:
+    import numpy as np
+    def train_test_split_np(n_samples, test_size=0.2, rng=None, shuffle=True):
+        # return train_idx, test_idx (integer array)
+        # n_samples: number of rows
+        # test_size: fraction of integer count
+        # rng: np.random.Generator or None -> default_rng(0)
+        if rng is None:
+            rng = np.random.default_rng(seed=0)
+        idx = np.arange(n_samples)
+        if shuffle:
+            rng.shuffle(idx)
+        if 0 < test_size < 1:
+            n_test = int(n_samples * test_size)
+        else:
+            n_test = int(test_size)
+        test_idx = idx[:n_test]
+        train_idx = idx[n_test:]
+        return train_idx, test_idx
+    # example
+    rng = np.random.default_rng(seed=42)
+    train_idx, test_idx = train_test_split_np(1000, test_size=0.25, rng=rng)
+    print(len(train_idx), len(test_idx))
+    # important patterns
+    # fit any preprocessing (imputer, scaler) on X[train_idx] and apply transform on both train and test - never fit on full data
+    # keep rng seed-controlled (default_rng(seed)) for reproducibility across runs and machines
+
+    # stratified splits with numpy
+    # for classification tasks you often want to preserve class proportions
+    # use np.unique with grouping and sample with each class:
+    def stratified_split(labels, test_size=0.2, rng=None):
+        # labels: 1D array-like of class labels
+        # returns train_idx, test_idx preserving label proportions
+        labels = np.asarray(labels)
+        if rng is None:
+            rng = np.random.default_rng(seed=0)
+        unique, inv = np.unique(labels, return_inverse=True)
+        train_mask = np.zeros(labels.shape[0], dtype=bool)
+        test_idx_list = []
+        train_idx_list = []
+        for cls in range(unique.size):
+            cls_idx = np.where(inv == cls)[0]
+            rng.shuffle(cls_idx)
+            if 0 < test_size < 1:
+                n_test = int(len(cls_idx) * test_size)
+            else:
+                n_test = int(test_size)
+            test_idx_list.append(cls_idx[:n_test])
+            train_idx_list.append(cls_idx[n_test:])
+        test_idx = np.concatenate(test_idx_list)
+        train_idx = np.concatenate(train_idx_list)
+        # shuffle the final indices
+        rng.shuffle(train_idx)
+        rng.shuffle(test_idx)
+        return train_idx, test_idx
+    # example
+    y = np.repeat([0, 1, 2], [50, 30, 20])
+    # imbalanced toy levels
+    rng = np.random.default_rng(seed=1)
+    train_idx, test_idx = stratified_split(y, test_size=0.2, rng=rng)
+    print('train counts:', np.bincount(y[train_idx]))
+    print('test counts:', np.bincount(y[test_idx]))
+    # this pattern is simple and avoid external dependencies
+    # for multi-label or complex stratification, you may prefer scikit-learn utilities,
+    # but the numpy pattern above covers most tabular cases
+
+    # K-fold and stratified K-fold generation
+    # lightweight K-fold generator in NumPy:
+    def kfold_indices(n_samples, n_splits=5, shuffle=True, rng=None):
+        if rng is None:
+            rng = np.random.default_rng(seed=0)
+        idx = np.arange(n_samples)
+        if shuffle:
+            rng.shuffle(idx)
+        fold_sizes = np.full(n_splits, n_samples // n_splits, dtype=int)
+        print(fold_sizes)
+        fold_sizes[: n_samples % n_splits] += 1
+        print(fold_sizes)
+        current = 0
+        for fold_size in fold_sizes:
+            start, stop = current, current + fold_size
+            test_idx = idx[start:stop]
+            train_idx = np.concatenate([idx[:start], idx[stop:]])
+            yield train_idx, test_idx
+            current = stop
+    # example
+    for fold, (tr, te) in enumerate(kfold_indices(23, n_splits=5, rng=rng)):
+        print(f'fold {fold}: train {len(tr)}, test {len(te)}')
+    # for stratified k-fold, group indices by label then distiribute class numbers across folds evenly
+    # implementation is similar to stratified split but with round-robin assignment into fold buckets
+
+    # cross-validation tips
+    # use the same random seed for splitting across experiments for comparability
+    # avoid shuffling time-series data unless you use time aware cross-validation
+    # (e.g., rolling window) - next section: time-series considerations
+    # when using stratified k-fold, ensure minimum class counts exceed n_splits to avoid empty test folds
+
+    # 13.2 feature scaling pipelines
+    # scaling is about reproducibility and safty
+    # implment simple fit / transform / save / load classes that operate on NumPy arrays only
+    # below we build a small, well-documented StandardScaler, MinMaxScaler, and a lightweight Pipeline
+    # that chains steps and persists parameters with np.savez
+
+    # a robust StandardScaler (Numpy implementation)
+    import numpy as np
+    import matplotlib.pyplot as plt
+    class StandardScalerNP:
+        def __init__(self, with_mean=True, with_std=True, dtype=np.float64):
+            self.with_mean = with_mean
+            self.with_std  = with_std
+            self.dtype     = dtype
+            self.mean_     = None
+            self.scale_    = None
+
+        def fit(self, X):
+            X = np.asarray(X, dtype=self.dtype)
+            if self.with_mean:
+                self.mean_ = np.nanmean(X, axis=0)
+            else:
+                self.mean_ = np.zeros(X.shape[1], dtype=self.dtype)
+            if self.with_std:
+                self.scale_ = np.nanstd(X, axis=0, ddof=0)
+                # avoid division by zero
+                self.scale_[self.scale_ == 0.0] = 1.0
+            else:
+                self.scale_ = np.ones(X.shape[1], dtype=self.dtype)
+            return self
+
+        def transform(self, X):
+            if self.mean_ is None or self.scale_ is None:
+                raise ValueError('Scaler has not been fitted.')
+            X = np.asarray(X, dtype=self.dtype, copy=True)
+            # imprecision: if X has NaNs, substraction preserves NaNs (desired)
+            X -= self.mean_
+            X /= self.scale_
+            return X
+
+        def fit_transform(self, X):
+            return self.fit(X),transform(X)
+
+        def save(self, path):
+            np.savez(path, mean=self.mean_, scale=self.scale_)
+
+        def load(self, path):
+            d = np.load(path)
+            self.mean_ = d['mean']
+            self.scale_ = d['scale']
+            return self
+    # usage
+    rng = np.random.default_rng(seed=0)
+    X_train = rng.normal(loc=5, scale=2, size=(100, 3))
+    X_test  = rng.normal(loc=5.1, scale=2.2, size=(20, 3))
+    scaler = StandardScalerNP().fit(X_train)
+    X_train_s = scaler.transform(X_train)
+    X_test_s = scaler.transform(X_test)
+    plt.plot(X_train, 'bo')
+    plt.plot(X_test, 'bx')
+    plt.plot(X_train_s, 'ro')
+    plt.plot(X_test_s, 'rx')
+    plt.grid(ls=':')
+    plt.close()
+
+    # min-max and robust scalers
+    class MinMaxScalerNP:
+        def __init__(self, feature_range=(0.0, 1.0), dtype=np.float64):
+            self.feature_range = feature_range
+            self.dtype = dtype
+            self.data_mim_ = None
+            self.data_max_ = None
+            self.data_range_ = None
+
+        def fit(self, X):
+            X = np.asarray(X, dtype=self.dtype)
+            self.data_min_ = np.nanmin(X, axis=0)
+            self.data_max_ = np.nanmax(X, axis=0)
+            self.data_range_ = self.data_max_ - self.data_min_
+            self.data_range_[self.data_range_ == 0] = 1.0
+            return self
+
+        def transform(self, X):
+            if self.data_min_ is None:
+                raise ValueError('not fitted')
+            X = np.asarray(X, dtype=self.dtype, copy=True)
+            X -= self.data_min_
+            X /= self.data_range_
+            a, b = self.feature_range
+            return X * (b - a) + a
+
+        # robust (median + IQR)
+        class RobustScalerNP:
+            def __init__(self, dtype=np.float64):
+                self.dtype = dtype
+                self.center_ = None
+                self.scale_ = None
+
+            def fit(self, X):
+                X = np.asarray(X, dtype=self.dtype)
+                self.center_ = np.nanmedian(X, axis=0)
+                q75 = np.nanpercentile(X, 75, axis=0)
+                q25 = np.nanpercentile(X, 25, axis=0)
+                iqr = q75 - q25
+                iqr[iqr==0] = 1.0
+                self.scale_ = iqr
+                return self
+
+            def transform(self, X):
+                X = np.asarray(X, dtype=self.dtype, copy=True)
+                X -= self.center_
+                X /= self.scale_
+                return X
+
+        # A minimal Pipeline utility
+        class NumpyPipeline:
+            def __init__(self, steps):
+                # steps: list of (name, transformer) where transformer implements fit/transform
+                self.steps = steps
+
+            def fit(self, X):
+                Xt = X
+                for name, transformer in self.steps:
+                    transformer.fit(Xt)
+                    Xt = transformer.transform(Xt)
+                return self
+
+            def transform(self, X):
+                Xt = X
+                for name, transformer in self.steps:
+                    Xt = transformer.transform(Xt)
+                return Xt
+
+            def fit_transform(self, X):
+                self.fit(X)
+                return self.transform(X)
+
+            def save(self, basepath):
+                params = {}
+                for name, transformer in self.steps:
+                    # save each transform to a separate file: '${basepath}__{name}.npz'
+                    transformer.save(f'{basepath}__{name}.npz')
+        
+        # important practical patterns
+        # always fit on training data only
+        # use copy=True semantics when you want to preserve original arrays
+        # persist scaler parameters (npz or joblib) along with meta-data (column order, dtype)
+        # document dtypes - many production systems expect float32
+
+        # why this matters in production
+        # during deployment you may receive single-row inference requests
+        # your transformation must be deterministic and use the exact same mean, scale and category maps used in training
+        # save and version those artifacts
+
+        # 13.3 dimensionality reduction with numpy
+        # PCA vis SVD is the canonical dimensionality-reduction technique
+        # we'll cover:
+        # centering and SVD-based PCA (direct)
+        # interpreting explained variance and choosing components
+        # memory-efficient PCA for large n using chunked covariance accumulation
+        # (when feature dimension p is manageable)
+
+        # PCA by SVD (standard, robust)
+        # given data matrix x with shape (n_samples, n_features):
+        # 1. center x by column means: Xc = X - X.mean(axis=0)
+        # 2. compute SVD: U, s, Vt = np.linalg.svd(Xc, full_matrices=False)
+        # 3. pricipal components (directions) are rows of Vt
+        #    project data: Z = Xc @ Vt.T or Z = U * s (scaled scores)
+        # 4. explained variance: var_explained = s**2 / (n_samples - 1)
+        #    proportion = var_explained / var_explained.sum()
+
+        # working code:
+        import numpy as np
+        def pca_svd(X, n_components=None, center=True):
+            X = np.asarray(X, dtype=float)
+            n, p = X.shape                                      # shape (n, p)
+            if center:
+                mean = np.mean(X, axis=0)
+                Xc = X - mean
+            else:
+                mean = np.zeros(p)
+                Xc = X
+            U, s, Vt = np.linalg.svd(Xc, full_matrices=False)
+            #plt.plot( np.cumsum(s**2/(n-1)/np.sum(s**2/(n-1))), 'o')
+            #plt.grid(ls=':')
+            #plt.show()
+            if n_components is None:
+                n_components = Vt.shape[0]
+            components = Vt[:n_components]                      # shape (k, p)
+            scores = U[:, :n_components] * s[:n_components]     # shape (n, k)
+            # explained variance
+            explained_variance = (s**2) / (n-1)
+            explained_variance_ratio = explained_variance / explained_variance.sum()
+            #
+            return {'components': components,
+                    'scores': scores,
+                    'explained_variance': explained_variance[:n_components],
+                    'explained_variance_ratio': explained_variance_ratio[:n_components],
+                    'mean': mean,
+                    'singular_values': s[:n_components]}
+        # example:
+        rng = np.random.default_rng(seed=0)
+        X = rng.normal(size=(200,50))
+        res = pca_svd(X, n_components=5)
+        print('explained ratios:', res['explained_variance_ratio'])
+
+        # projecting new data: to project a new matrix x_new:
+        def project_new(X_new, components, mean):
+            Xn = np.asarray(X_new, dtype=float) - mean
+            return Xn @ components.T
+        # use components (k, p) and mean saved from training
+
+        # choosing number of components
+        # choose k by
+        # cumulative explained variance threshold (e.g.,95%):
+        # pick smallest k with sum(ratio[:k]) >= 0.95
+        # scree plot (plot singular values or explained variance) to find elbow
+        # downstream model performance via cross-validation
+
+        cumvar = np.cumsum(res['explained_variance_ratio'])
+        k = np.searchsorted(cumvar, 0.95) + 1
+        print('components for 95%:', k)
+
+        # memory-efficient PCA for large n (many samples, moderate features)
+        # if n is huge but p (number of features) is moderate (e.g.,p=100-10k),
+        # compute the sample covariance matrix in chunks and eigendecompose the p x p covariance:
+        # 1. compute column means by chunking (chapter 4 patterns)
+        # 2. compute covariance: accumulate Xc.T @ Xc in chunks
+        # 3. divide by (n-1) to get covariance C (shape p x p)
+        # 4. compute eigendecomposition w, v = np.linang.eigh(C) (symmetric) and sort decending
+
+        # code sketch:
+        def incremental_mean_cov(source, n_rows, n_features, chunk_rows=10000, dtype=np.float64):
+            # source: function(start, stop) -> returns array (stop-start, n_features)
+            #         e.g., a memmap slice or reader function
+            # 1) compute mean
+            total = np.zeros(n_features, dtype=dtype)
+            count = 0
+            for i in range(0, n_rows, chunk_rows):
+                block = source(i, min(n_rows, i+chunk_rows)).astype(dtype)
+                total += np.nansum(block, axis=0)
+                count += (~np.isnan(block)).sum(axis=0)
+            mean = total / count    # element-wise
+            # 2) compute covariance accumulator
+            cov_acc = np.zeros((n_features, n_features), dtype=dtype)
+            for i in range(0, n_rows, chunk_rows):
+                block = source(i, min(n_rows, i+chunk_rows)).astype(dtype)
+                # subtract column means, taking care of NaNs
+                inds = np.where(np.isnan(block))
+                block[inds] = 0.0
+                block -= mean
+                cov_acc += block.T @ block  # (p, k) @ (k, p) -> (p, p)
+            # divide by (n-1) or actual effective count per pair - approximate when NaNs exist
+            cov = cov_acc / (n_rows - 1)
+            return mean, cov
+        # eigendecompose
+        # w, V = np.linalg.eigh(cov)    # ascending order
+        # sort descending:
+        # idx = np.argsort(w)[::-1]
+        # w = w[idx]; V = V[:, idx]
+        
+        # this approach avoids forming n x p matrices in memory at once
+        # and computes PCA via covariance eigendecomposition
+        # it's efficient if p is small enough to fit p x p in memory
+        # handling NaNs and varying counts per pair requires more care
+        # (use pairwise counts and divide per element),
+        # but for many datasets full rows are present and the simple approach is fine
+
+        # randomized PCA (sketch)
+        # for very large p and n, randomized SVD algorithms (Halko et al.) are efficient
+        # implementing a robust randomized SVD is non-trivial; instead, you can:
+        # use scikit-learn's randomized_svd or IncrementalPCA which wrap efficient C code
+        # if you must stick to numpy only, implement a simple power-iteration style
+        # randomized SVD (beyond this chapter's scope), or use block processing with
+        # np.linalg.svd on smaller projected data
+
+        # practical PCA checklist
+        # center data before SVD - do not compute PCA on raw data unless you understand the consequences
+        # save mean and components for inference
+        # for numerical stability prefer SVD over eigendecomposition of X.T @ X when n and p are comparable
+        # for p << n, the covariance-based approach (eigendecomposition of p x p) is cheaper
+        # for data with NaNs, either impute first or use algorithms that can handle missingness
+        # impute using train-only statistics
+
+        # personal insight:
+        # i often do PCA as a diagnostic first - singular-value spectrum quickly tells me
+        # if the data is effectively low-rank (a handful of large singular values) or high-dimensional noise
+        # if the spectrum drops quickly,
+        # a low-dimensional projection both speeds training and often improves generalization
+
+        # key takeaways
+        # always split data reproducibly:
+        # use np.random.default_rng(seed) and fit preprocessing on training data only
+        # for classification use stratified splits to preserve class proportions
+        # build small, explicit fit/transform objects for scalars (standard. minmax, robust);
+        # persist their parameters and apply them consistently at inference time
+        # PCA vis SVD is robust and gives both components and explained variance;
+        # save mean and components to tranform new data
+        # choose k by cumulative explained-variance or downstream validation
+        # for very large n but moderate p,
+        # compute covariance in chunks and eigendecompose the p x p matrox (memory-efficient PCA)
+        # for extremen scale or high p, use specialized randomized or incremental PCA implementations (e.g., scikit-learn)
+        # document and presist metadata (column order, dtype, scaler parameters, category mapping)
+        # this is the single most practical habit for maintaining reproducible pipelines
+        
+
+
+#
 # CH 14: Linear Regression from Scratch
 #
 
-class LinearRegressionGD:
+if True:
+    # linear regression is the canonical first supervised learning algorithm:
+    # simple to state, but rich enough to teach best practices for optimization, numerical stability, and model evaluation
+    # in this chapter we build linear regression from first priciples
+    # closed-form solution and gradient-based optimization
+    # then show how to evaluate and diagnose models so you can trust them in practice
+    # we'll proceed step-by-step, with clear vectorized numpy code you can paste into a notebook and run
+    # 
+    
+    class LinearRegressionGD:
 
-    def __init__(self,
-                 lr: float = 1e-2,
-                 n_epochs: int = 1000,
-                 batch_size: Optional[int] = None,  # None -> full-batch, 1 -> SGD, -1 -> mini-batch
-                 alpha: float = 0.0,                # L2 regularization strength (Ridge)
-                 fit_intercept: bool = True,
-                 tol: float = 1e-6,
-                 shuffle: bool = True,
-                 verbose: bool = False,
-                 rng: Optional[np.random.Generator] = None,):
+        def __init__(self,
+                     lr: float = 1e-2,
+                     n_epochs: int = 1000,
+                     batch_size: Optional[int] = None,  # None -> full-batch, 1 -> SGD, -1 -> mini-batch
+                     alpha: float = 0.0,                # L2 regularization strength (Ridge)
+                     fit_intercept: bool = True,
+                     tol: float = 1e-6,
+                     shuffle: bool = True,
+                     verbose: bool = False,
+                     rng: Optional[np.random.Generator] = None,):
 
-        # input parameters
-        self.lr = lr
-        self.n_epochs = n_epochs
-        self.batch_size = batch_size
-        self.alpha = alpha
-        self.fit_intercept = fit_intercept
-        self.tol = tol
-        self.shuffle = shuffle
-        self.verbose = verbose
-        self.rng = rng or np.random.default_rng(0)
+            # input parameters
+            self.lr = lr
+            self.n_epochs = n_epochs
+            self.batch_size = batch_size
+            self.alpha = alpha
+            self.fit_intercept = fit_intercept
+            self.tol = tol
+            self.shuffle = shuffle
+            self.verbose = verbose
+            self.rng = rng or np.random.default_rng(0)
 
-        #
-        self.coef_ = None   # includes intercept if fit_intercept = True
-        self.loss_history = []
-
-
-    def _add_bias(self,
-                  X: np.ndarray) -> np.ndarray:
-        #
-        if not self.fit_intercept:
-            return X
-
-        #
-        ones = np.ones((X.shape[0], 1), dtype=X.dtype)
-        return np.concatenate([ones, X], axis=1)
-
-
-    def _regularization_term(self,
-                             w: np.ndarray) -> np.ndarray:
-        # return vector to add to gradient for L2 penalty
-        if self.alpha == 0.0:
-            return 0.0
-        
-        if not self.fit_intercept:
-            return (self.alpha / X.shape[0]) * w
-
-        # do not regularize the intercept (first element)
-        reg = (self.alpha / X.shape[0]) * w.copy()
-        reg[0] = 0.0
-        return reg
-
-
-    def fit(self,
-            X: np.ndarray,
-            y: np.ndarray) -> 'LinearRegressionGD':
-
-        X = np.asarray(X, dtype=float)
-        y = np.asarray(y, dtype=float).reshape(-1)
-
-        n, p = X.shape
-        Xb = self._add_bias(X)  # shape (n, p+1) if intercept, else (n, p)
-        m = Xb.shape[1]         # init weights (small random or zeros)
-
-        self.coef_ = np.zeros(m, dtype=float)
-
-        # set default batch_size
-        if self.batch_size is None:
-            batch_size = n      # full-batch
-        else:
-            batch_size = int(self.batch_size)
-
-        #
-        for epoch in range(self.n_epochs):
             #
-            if self.shuffle:
-                perm = self.rng.permutation(n)
-                Xb = Xb[perm]
-                y = y[perm]
-
-            epoch_loss = 0.0
-
-            for i in range(0, n, batch_size):
-                xb = Xb[i:i+batch_size]
-                yb = y[i:i+batch_size]
-                pred = xb @ self.coef_      # (batch, )
-                err = pred - yb             # (batch, )
-                grad = (xb.T @ err) / xb.shape[0]   # (m,)
-
-                # add L2 regularization (do not regularize intercept)
-                if self.alpha != 0.0:
-                    reg = (self.alpha / n) * self.coef_.copy()
-                    if self.fit_intercept:
-                        reg[0] = 0.0
-                    grad += reg
-
-                # gradient step
-                self.coef_ = self.coef_ - self.lr * grad
-
-                # accumulate loss (for monitoring)
-                epoch_loss += 0.5 * (err**2).sum()
-
-            epoch_loss / n
+            self.coef_ = None   # includes intercept if fit_intercept = True
+            self.loss_history = []
 
 
+        def _add_bias(self,
+                      X: np.ndarray) -> np.ndarray:
+            #
+            if not self.fit_intercept:
+                return X
+
+            #
+            ones = np.ones((X.shape[0], 1), dtype=X.dtype)
+            return np.concatenate([ones, X], axis=1)
 
 
+        def _regularization_term(self,
+                                 w: np.ndarray) -> np.ndarray:
+            # return vector to add to gradient for L2 penalty
+            if self.alpha == 0.0:
+                return 0.0
+            
+            if not self.fit_intercept:
+                return (self.alpha / X.shape[0]) * w
+
+            # do not regularize the intercept (first element)
+            reg = (self.alpha / X.shape[0]) * w.copy()
+            reg[0] = 0.0
+            return reg
 
 
+        def fit(self,
+                X: np.ndarray,
+                y: np.ndarray) -> 'LinearRegressionGD':
 
+            X = np.asarray(X, dtype=float)
+            y = np.asarray(y, dtype=float).reshape(-1)
 
+            n, p = X.shape
+            Xb = self._add_bias(X)  # shape (n, p+1) if intercept, else (n, p)
+            m = Xb.shape[1]         # init weights (small random or zeros)
 
+            self.coef_ = np.zeros(m, dtype=float)
 
+            # set default batch_size
+            if self.batch_size is None:
+                batch_size = n      # full-batch
+            else:
+                batch_size = int(self.batch_size)
+
+            #
+            for epoch in range(self.n_epochs):
+                #
+                if self.shuffle:
+                    perm = self.rng.permutation(n)
+                    Xb = Xb[perm]
+                    y = y[perm]
+
+                epoch_loss = 0.0
+
+                for i in range(0, n, batch_size):
+                    xb = Xb[i:i+batch_size]
+                    yb = y[i:i+batch_size]
+                    pred = xb @ self.coef_      # (batch, )
+                    err = pred - yb             # (batch, )
+                    grad = (xb.T @ err) / xb.shape[0]   # (m,)
+
+                    # add L2 regularization (do not regularize intercept)
+                    if self.alpha != 0.0:
+                        reg = (self.alpha / n) * self.coef_.copy()
+                        if self.fit_intercept:
+                            reg[0] = 0.0
+                        grad += reg
+
+                    # gradient step
+                    self.coef_ = self.coef_ - self.lr * grad
+
+                    # accumulate loss (for monitoring)
+                    epoch_loss += 0.5 * (err**2).sum()
+
+                epoch_loss / n
 
 
 
