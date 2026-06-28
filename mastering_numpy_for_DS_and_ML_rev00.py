@@ -3685,21 +3685,62 @@ if True:
     # closed-form solution and gradient-based optimization
     # then show how to evaluate and diagnose models so you can trust them in practice
     # we'll proceed step-by-step, with clear vectorized numpy code you can paste into a notebook and run
-    # 
+    # at the end you'll understand trade-offs (when to use the normal equation vs gradient descent),
+    # how to add regularization, and how to check whether a model actually learned something useful
+
+    # 14.1 implementing gradient descent
+    # problem setup and notation (very short)
+    # given an input matrix X (real, n x p) and target y (real, n), linear regression models
+    # y = X w + b
+    # we'll implement the bias b by augmenting X with a constant column so we only solve for a single parameter vector w)
+    # the squared-error loss (mean squared error) we minimize is
+    # J_w = 1/2n || X w - y ||^2 = 1/2n (X w - y).T @ (X w - y)
+    # we include the 1/2 to simplify gradients
+    # its gradient is
+    # del J_w = 1/n X.T @ (X w - y)
+    # gradient descent update w <- w - eta del J_w with step size (learning rate) eta
+
+    # closed-form (normal equation) - quick reference
+    # if you want the exact solution (and p is not too large),
+    # the normal equation is
+    # w* = (X.T @ X)^-1 @ (X.T @ y)
+    # with L2 (Ridge) regularization lambda, the closed form becomes
+    # w* = (X.T @ X + lambda I)^-1 @ (X.T @ y)
+    # where the bias is usually excluded from regularization
+    # you can handle that by augmenting II appropriately
+    # drawbacks
+    # computing and inverting X.T @ X costs O(p^3) and can be numerically unstable
+    # if X.T @ X is ill-conditioned or p is very large
+
+    # vectorized batch gradient descent (implementation)
+    # below is a single, self-constrained. well-documented numpy implementation that includes options for:
+    # fit intercept (bias)
+    # L2 regularization (Ridge)
+    # batch / mini-batch / stochastic updates
+    # learning-rate schedule
+    # early stopping by tolerance
+    # returning loss history for diagnostics
+
+    import numpy as np
+    from typing import Optional, Tuple
     
     class LinearRegressionGD:
-
+        # lienar regression using gradient descent (supports mini-batches and L2 regularization)
+        # minimize (1/(2n)) * || X w - y ||^2 + (alpha/(2n)) * || w_reg ||^2
+        # where w_reg excluded the bias term (if fit_intercept=True)
+        # function annotation (kind of comments)
+        #  (a)  :  metadata of input parameters
+        #  (b) ->  metadata of return value
         def __init__(self,
                      lr: float = 1e-2,
                      n_epochs: int = 1000,
-                     batch_size: Optional[int] = None,  # None -> full-batch, 1 -> SGD, -1 -> mini-batch
+                     batch_size: Optional[int] = None,  # None -> full-batch, 1 -> SGD, >1 -> mini-batch
                      alpha: float = 0.0,                # L2 regularization strength (Ridge)
                      fit_intercept: bool = True,
                      tol: float = 1e-6,
                      shuffle: bool = True,
                      verbose: bool = False,
                      rng: Optional[np.random.Generator] = None,):
-
             # input parameters
             self.lr = lr
             self.n_epochs = n_epochs
@@ -3710,57 +3751,48 @@ if True:
             self.shuffle = shuffle
             self.verbose = verbose
             self.rng = rng or np.random.default_rng(0)
-
             #
             self.coef_ = None   # includes intercept if fit_intercept = True
             self.loss_history = []
-
 
         def _add_bias(self,
                       X: np.ndarray) -> np.ndarray:
             #
             if not self.fit_intercept:
                 return X
-
             #
             ones = np.ones((X.shape[0], 1), dtype=X.dtype)
             return np.concatenate([ones, X], axis=1)
-
 
         def _regularization_term(self,
                                  w: np.ndarray) -> np.ndarray:
             # return vector to add to gradient for L2 penalty
             if self.alpha == 0.0:
-                return 0.0
-            
+                return 0.0            
             if not self.fit_intercept:
                 return (self.alpha / X.shape[0]) * w
-
             # do not regularize the intercept (first element)
             reg = (self.alpha / X.shape[0]) * w.copy()
             reg[0] = 0.0
             return reg
 
-
         def fit(self,
                 X: np.ndarray,
                 y: np.ndarray) -> 'LinearRegressionGD':
-
+            #
             X = np.asarray(X, dtype=float)
-            y = np.asarray(y, dtype=float).reshape(-1)
-
+            y = np.asarray(y, dtype=float).reshape(-1)  # 1-D array flattening
+            #
             n, p = X.shape
             Xb = self._add_bias(X)  # shape (n, p+1) if intercept, else (n, p)
             m = Xb.shape[1]         # init weights (small random or zeros)
-
+            #
             self.coef_ = np.zeros(m, dtype=float)
-
             # set default batch_size
             if self.batch_size is None:
                 batch_size = n      # full-batch
             else:
                 batch_size = int(self.batch_size)
-
             #
             for epoch in range(self.n_epochs):
                 #
@@ -3768,9 +3800,9 @@ if True:
                     perm = self.rng.permutation(n)
                     Xb = Xb[perm]
                     y = y[perm]
-
+                #
                 epoch_loss = 0.0
-
+                #
                 for i in range(0, n, batch_size):
                     xb = Xb[i:i+batch_size]
                     yb = y[i:i+batch_size]
