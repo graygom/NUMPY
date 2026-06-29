@@ -3753,7 +3753,7 @@ if True:
             self.rng = rng or np.random.default_rng(0)
             #
             self.coef_ = None   # includes intercept if fit_intercept = True
-            self.loss_history = []
+            self.loss_history_ = []
 
         def _add_bias(self,
                       X: np.ndarray) -> np.ndarray:
@@ -3806,26 +3806,134 @@ if True:
                 for i in range(0, n, batch_size):
                     xb = Xb[i:i+batch_size]
                     yb = y[i:i+batch_size]
-                    pred = xb @ self.coef_      # (batch, )
-                    err = pred - yb             # (batch, )
+                    pred = xb @ self.coef_              # (batch, )
+                    err = pred - yb                     # (batch, )
                     grad = (xb.T @ err) / xb.shape[0]   # (m,)
-
                     # add L2 regularization (do not regularize intercept)
                     if self.alpha != 0.0:
                         reg = (self.alpha / n) * self.coef_.copy()
                         if self.fit_intercept:
                             reg[0] = 0.0
                         grad += reg
-
                     # gradient step
                     self.coef_ = self.coef_ - self.lr * grad
-
                     # accumulate loss (for monitoring)
                     epoch_loss += 0.5 * (err**2).sum()
+                #
+                epoch_loss /= n
+                self.loss_history_.append(epoch_loss)
+                #
+                if self.verbose and (epoch % max(1, self.n_epochs // 10) == 0):
+                    print(f'Epoch{epoch+1}/{self.n_epochs} loss={epoch_loss:.6f}')
+                # convergence check (relative tolerance on parameter update norm)
+                if epoch > 0 and abs(self.loss_history_[-2] - self.loss_history_[-1]) < self.tol:
+                    if self.verbose:
+                        print(f'converged at epoch {epoch+1}')
+                    break
+            #
+            return self
 
-                epoch_loss / n
+        def predict(self,
+                    X: np.ndarray) -> np.ndarray:
+            #
+            X = np.asarray(X, dtype=float)
+            Xb = self._add_bias(X)
+            #
+            return Xb @ self.coef_
 
+        def mse(self,
+                X: np.ndarray,
+                y: np.ndarray) -> float:
+            #
+            pred = self.predict(X)
+            #
+            return np.mean( (pred-y)**2 )
 
+        def rmse(self,
+                 X: np.ndarray,
+                 y: np.ndarray) -> float:
+            #
+            return np.sqrt(self.mse(X, y))
+
+    # notes on the code:
+    # we augment XX with a column of ones to model the bias;
+    # that keeps the implementation simple and vectorized
+    # batch_size = None uses full-batch gradient descent (one gradient per epoch)
+    # batch_size = 1 is classical SGD (Stochastic Gradient Descent)
+    # small mini-batches (e.g., 32-512) are often effective in practice
+    # the regularization term divided by n (consistent with the loss normalization)
+    # we exclude the intercept from penalty
+    # loss_history_ stores the epoch loss to plot learning curves and inspect convergence
+
+    # mini-batch and learning-rate schedules
+    # small changes can turn the previous implementation into mini-batch SGD with a learning-rate schedule
+    # inside the training loop, replace self.lr with an adaptive lr:
+    #eta_t = self.lr / (1.0 + decay * epoch)
+    # simple time-based decay
+    # or implement step decay or cosine annealing depending on needs
+
+    # common strategies:
+    # constant learning rate (simple, works for convex problems if small)
+    # time-based decay eta_t = eta_0 / (1 + gamma * t)
+    # step decay: reduce by factor at fixed epochs
+    # adaptive optimizers (Adam, RMSProp) - out of scope, but for non-convex deep nets prefer those
+
+    # for convex linear regression, constant or slowly decaying learning rate plus batch-size tuning is usually sufficient
+
+    # numerical stability and preprocessing
+    # gradient descent converges faster and more stably if features are scaled (standardized or normalized)
+    # always compute scaling parameters (mean/std or min/max) on training data,
+    # then apply the same transform to validation/test sets
+    # see chapter 7 for scalers
+
+    # when using closed-from normal equation and X.T @ X is ill-conditioned, either:
+    # add L2 regularization (Ridge), or
+    # use SVD / pseudo-inverse (np.linalg.pinv) which is numerically robust
+
+    # closed-form Ridge solution in code
+    def ridge_closed_form(X, y, alpha=1e-3, fit_intercept=True):
+        #
+        X = np.asarray(X, dtype=float)
+        y = np.asarray(y, dtype=float).reshape(-1)
+        #
+        if fit_intercept:
+            ones = np.ones((X.shape[0], 1))
+            Xb = np.hstack([ones, X])
+        else:
+            Xb = X
+        # build regularization matrix (do not regularize intercept
+        n, p = Xb.shape
+        I = np.eye(p)
+        if fit_intercept:
+            I[0,0] = 0.0
+        #
+        A = Xb.T @ Xb + alpha * I
+        w = np.linalg.solve(A, Xb.T @ y)
+        # includes intercept if fit_intercept
+        return w
+
+    # worked example - compare closed form vs gradient descent
+    # generate synthetic data
+    rng = np.random.default_rng(seed=0)
+    n, p = 500, 5
+    X = rng.normal(size=(n, p))
+    true_w = np.arange(1, p+1) * 0.5    # [0.5, 1.0, 1.5, ...]
+    y = X @ true_w + 0.3 + rng.normal(scale=0.5, size=n)
+    # scale features (recommended)
+    X_mean = X.mean(axis=0)
+    X_std = X.std(axis=0)
+    Xs = (X-X_mean) / X_std
+    # closed-form (normal equation)
+    w_closed = ridge_closed_form(Xs, y, alpha=0.0, fit_intercept=True)
+    print('closed-form weights (including intercept):', w_closed)
+    # gradient descent
+    mdl = LinearRegressionGD(lr=0.05, n_epochs=2000, batch_size=64, alpha=0.0, fit_intercept=True, verbose=False)
+    mdl.fit(Xs, y)
+    print('GD weights (including intercept):', mdl.coef_)
+    print('Final RMSE (GD):', mdl.rmse(Xs, y))
+    print('Closed-form RMSE:', np.sqrt(np.mean(((np.hstack([np.ones((n,1)), Xs]) @ w_closed)-y)**2)))
+    # you should find similar coefficients and similar RMSEs (up to optimization tolerance)
+    # if they differ significantly, check learning rate, scaling, or convergence
 
 
 
