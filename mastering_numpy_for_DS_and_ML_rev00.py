@@ -3935,5 +3935,106 @@ if True:
     # you should find similar coefficients and similar RMSEs (up to optimization tolerance)
     # if they differ significantly, check learning rate, scaling, or convergence
 
+    # 14.2 evaluating model performance
+    # implementing regression is only half the work:
+    # evaluation tells you whether the model is useful
+    # we'll cover metrics, residual diagnostics, learning curves, cross-validation, and some practical caveats
+
+    # basic performance metrics (definitions and code)
+    # mean squared error (MSE): 1/n sum (y_i - (y_i)^)^2
+    # root MSE (RMSE): sqrt(MSE) - same units as y
+    # mean absolute error (MAE): 1/n sum |y_i - (y_i)^|
+    # coefficient of determination R^2: 1 - ( sum (y_i - (y_i)^)^2 ) / ( sum (y_i - (y_mean))^2 )
+    #  ( fraction of variance explained )
+
+    # code:
+    def mse(y, y_pred):
+        y = np.asarray(y)
+        y_pred = np.asarray(y_pred)
+        return np.mean((y-y_pred)**2)
+    def rmse(y, y_pred):
+        return np.sqrt( mse(y, y_pred) )
+    def mae(y, y_pred):
+        return np.mean(np.abs(y-y_pred))
+    def r2_score(y, y_pred):
+        y = np.asarray(y)
+        y_pred = np.asarray(y_pred)
+        ss_res = np.sum((y-y_pred)**2)
+        ss_tot = np.sum((y-y.mean())**2)
+        return 1.0 - ss_res/ss_tot
+
+    # interpretation
+    # MSE/RMSE/MAE are absolute error measures; lower is better
+    # R^2 near 1 indicates the model explains most variance
+    # negative R^2 means a model worse than predicting the mean
+    # compare test vs train metrics to detect overfitting
+    # (train error much smaller than test)
+
+    # residual diagnostics
+    # residual r_i = y_i - y_pred_i reveal model misspecification
+    # plot residuals vs predicted (should look like noise centered around 0)
+    # histogram or KDE of residuals (approx normality is an assumption for sime inference)
+    # QQ-plot if residuals against normal quantiles to check heavy tails
+
+    # example code for simple residual plot (matplotlib):
+    import matplotlib.pyplot as plt
+    def residual_diagnostics(y, y_pred):
+        res = y - y_pred
+        plt.figure(figsize=(12, 4))
+        plt.subplot(1,2,1)
+        plt.scatter(y_pred, res, alpha=0.6, s=10)
+        plt.axhline(0, color='r', linestyle='--')
+        plt.xlabel('Predicted')
+        plt.ylabel('Residuals')
+        plt.title('Residuals vs Predicted')
+        plt.subplot(1,2,2)
+        plt.hist(res, bins=30)
+        plt.title('residual histogram')
+        plt.tight_layout()
+        plt.show()
+
+    # look for patterns
+    # non-zero mean residuals -> bias (missing intercept or wrong preprocessing)
+    # heteroscedasticity (residual spread depends on prediction) -> consider variance-stabilizing transforms (log) or weighted regression
+    # nonlinearity (residual curve) -> the linear model lacks necessary features (interaction, polynomial terms)
+
+    # cross-validation and learning curves
+    # cross-validation (e.g., K-fold) gives more reliable estimates of generalization performance than a single train/test split
+    # you can implement K-fold manually (chapter 13 for index generator)
+    # for each fold, fit on train indices and evaluate on test indices, then aggregate metrics
+
+    # learning curves help diagnose high bias vs high variance:
+    # vary training set size and plot train and validation error vs training size
+    # if both errors are high and close -> underfitting (increase model capacity or add features)
+    # if training error is much lower than validation error -> overfitting (regularize, more data, simpler model)
+
+    # sketch for learning curve:
+    def learning_curve(model_cls, X, y, train_sizes, **model_kwargs):
+        n = X.shape[0]
+        rng = np.random.default_rng(seed=0)
+        res = []
+        for frac in train_sizes:
+            k = int(n*frac)
+            idx = rng.permutation(n)
+            tr_idx = idx[:k]
+            val_idx = idx[k:k+int(0.2*n)]   # fixed validation chunk
+            model = model_cls(**model_kwargs)
+            model.fit(X[tr_idx], y[tr_idx])
+            tr_err = model.mse(X[tr_idx], y[tr_idx])
+            val_err = model.mse(X[val_idx], y[val_idx])
+            res.append((k, tr_err, val_err))
+        return res
+    # then plot tr_err and val_err vs k
+
+    # practical model-selection and evaluation tips
+    # always validate on unseen data
+
+
+
+
+
+
+
+
 
 
