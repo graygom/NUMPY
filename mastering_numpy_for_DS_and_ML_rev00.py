@@ -3678,7 +3678,7 @@ if False:
 # CH 14: Linear Regression from Scratch
 #
 
-if True:
+if False:
     # linear regression is the canonical first supervised learning algorithm:
     # simple to state, but rich enough to teach best practices for optimization, numerical stability, and model evaluation
     # in this chapter we build linear regression from first priciples
@@ -4028,8 +4028,71 @@ if True:
 
     # practical model-selection and evaluation tips
     # always validate on unseen data
+    # fit preprocessors on training set, then transform validation/test sets with saved parameters
+    # report multiple metrics
+    # RMSE gives scale
+    # MAE is robust to outliners
+    # R^2 gives variation explanation
+    # use cross-validation
+    # for hyperparameter election (learning rate, regularization strength)
+    # grid search or randomized search are standard
+    # chech residual
+    # befor trusting p-values or intervals
+    # linear regression assumption matter for interpretability
+    # baseline models
+    # always compare against a simple baseline (predict mean or a previous value for time-series)
+    # if your fancy model doesn't beat the baseline, investigate
+
+    # key takeaways
+    # linear regression has both closed-form and iterative solutions
+    # use closed-form (normal equation on Ridge closed form) when pp is small and you need the exact solutions;
+    # use gradient descent / mini-batch SGD when pp is large or you want streaning/online updates
+    # vecterized
+    # numpy implementations are compact and fast
+    # implement the bias by augmenting XX with a ones column and use matrix multiplications for gradients
+    # feature scaling
+    # greatly improves gradient-descent convergences;
+    # always compute scaling parameters on traning data only
+    # regularization (L2/Ridge)
+    # stabilizes solutions and helps when features are collinear or problem is ill-conditioned
+    # evaluation is an important as training;
+    # use RMSE/MAE/R^2, residual plots, learning curves, and cross-validation
+    # to assess generalization and diagnose problems (bias vs variance, heteroscedasticity, nonlinearity)
+    # for production, presist both the model parameters and preprocessing artifacts (means, stds, category maps)
+    # mismatched transforms are the most common source of inference bugs
+        
 
 
+#
+# CH 15: Image Processing with arrays
+#
+
+if True:
+    # images are just arrays - that simple fact is powerful
+    # treating images as ndarray gives you the freedom to experiment, prototype filters,
+    # and build pipelines that are easy to understand and fast to iterate on
+    # in this chapter we'll treat images as numeric data;
+    # how to read and write them safely,
+    # how to build and apply filters efficiently with numpy,
+    # and how to detect edges with classic kernels (Sobel)
+    # you'll get copy-and-pasteable implementations, practical performance tips,
+    # and small real-world recipes you and drop into a notebook
+
+    # 15.1 images as ndarray
+    # an images is a small (or large) array of numbers, typically with shape:
+    # grayscale: (H, W)
+    # color (RGB): (H, W, 3)
+    # color with alpha: (H, W, 4)
+    # and typical dtypes:
+    # unit8 with values 0..255 (very common for photos)
+    # float32 or float64 with values normalized to [0.0, 1.0] or sometimes [-1, 1] for model inputs
+    # understanding dtype and value range is crucial;
+    # filtering should normally happen in a linear color space and with floats fir numerical stability
+
+    # quick I/O (Pillow + Numpy)
+    import PIL as pl
+    import numpy as np
+    
 
 
 
