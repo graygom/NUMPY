@@ -4090,11 +4090,49 @@ if True:
     # filtering should normally happen in a linear color space and with floats fir numerical stability
 
     # quick I/O (Pillow + Numpy)
-    import PIL as pl
+    import matplotlib.pyplot as plt
+    from PIL import Image
     import numpy as np
-    
+    def load_image(path, as_gray=False, as_float=True):
+        # load image using Pillow and return a Numpy array
+        # as_gray: return single-channel float image
+        # as_float: if True, convert to float32 in [0,1]; otherwise keep unit8
+        img = Image.open(path).convert('RGB' if not as_gray else 'L')
+        arr = np.array(img)
+        if as_float:
+            arr = arr.astype(np.float32) / 255.0
+        return arr
+    def save_image(arr, path):
+        # save image array to disk
+        # accepts floats in [0, 1] or unit8
+        a = np.asarray(arr)
+        if np.issubdtype(a.dtype, np.floating):
+            a = np.clip(a * 255.0, 0, 255.0).astype(np.uint8)
+            Image.fromarray(a).save(path)
+    #img_arr = load_image(path='./I0000163.jpg')
+    #plt.imshow(img_arr)
+    #plt.show()
 
+    # notes
+    # use convert('RBG') to standardize images to 3 channels
+    # if you work with image pipelines, prefer float32 in p0,1] for filters and neural nets
+    # convert back to unit8 only when saving or displaying
+    # if you need to preserve alpha channels use convert('RGBA')
 
+    # RGB -> grayscale (luminosity)
+    # a luminance-preseving conversion:
+    def rgb2gray(rgb):
+        # convert an RGB float array (H, W, 3) in [0, 1] to a grayscale float array (H, W)
+        r, g, b = rgb[..., 0], rgb[..., 1], rgb[..., 2]
+        # standard Rec. 601 luma coefficients (approx)
+        return 0.2989 * r + 0.5870 * g + 0.1140 * b
+    #img_arr = rgb2gray(load_image(path='./I0000163.jpg'))
+    #plt.imshow(img_arr)
+    #plt.show()
+
+    # gamma warning
+    # many images are stored in sRGB (gamma-corrected)
+    # strictly
 
 
 
