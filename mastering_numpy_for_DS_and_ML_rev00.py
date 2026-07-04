@@ -4067,7 +4067,7 @@ if False:
 # CH 15: Image Processing with arrays
 #
 
-if True:
+if False:
     # images are just arrays - that simple fact is powerful
     # treating images as ndarray gives you the freedom to experiment, prototype filters,
     # and build pipelines that are easy to understand and fast to iterate on
@@ -4336,8 +4336,146 @@ if True:
     # this captures edges that appear strongly in any color channel
 
     # example end-to-end pipeline
-        
+    # 1. load
+    img = load_image('axial_mri.jpg', as_gray = False, as_float=True)
+    # 2. grayscale
+    img_g = rgb2gray(img)
+    # 3. denoise a little with Gaussian blur
+    g_blur = convolve2d(img_g, gaussian_kernel(size=5, sigma=1.0))
+    # 4. Sobel edges
+    gx, gy, mag, orient = sobel_edges(g_blur)
+    # 5. edge map
+    edges = simple_edge_map(mag, threshold=0.2)
+    # 6. save result
+    save_image(mag, 'axial_mri_mag.jpg')
+    # this simple 6-step pipeline will find crisp edges for many photographs
 
+    # performance & robustness tips
+    # pre-blur to reduce noise-driven false edges (Gaussian kernel, small sigma like 1.0)
+    # use separable kernels for Gaussian blurs to improve speed
+    # work in float32 to reduce memory and keep speed high: img = img.astype(np.float32)
+    # padding mode impacts border behavior: 'reflect' is a good defulat that avoids border artifacts
+    # large images: process in tiles with overlap equal to kernel radius to avoid seams
+    # see block processing in chaper10
+    # for production edge detection: use Canny (skimage.features.canny)
+    # it implements smoothing, gradient, non-maximum suppression, and hysteresis in a well-tuned pipeline
+
+    # personal notes & practical pitfalls
+    # i often start with grayscale Sobel for quick diagnostics
+    # it's fast, easy to visualize, and tells me if my pipeline is correctly aligned and whether the image is too noisy
+    # for photo editing, remember to linearize sRGB before filtering
+    # i tripped over this once: brightening then blurring without linearization produced subtly different highlights than expected
+    # for many machine-learning pipelines this subtlety can be ignored, but for photorealistic edits it matters
+    # when experimenting, keep an eye on memory use: naive vectorized sliding-window approaches create large intermediate views
+    # use separable filters or block processing when images or kernels are large
+    # for higher-quality or more advanced operations (morphology, Canny, bilateral filtering),
+    # rely on scipy.ndimage or scikit-image - they are optimized and tested
+    # still, implementing your own versions in Numpy is invaluable for learning and debugging
+
+    # key takeaways
+    # images are array - read/write with Pillow and convert to float32 in [0,1] for most processing
+    # understanding dtype and value ranges; convert back to uint8 only when saving or displaying
+    # convolution is the building block:
+    # implement it via sliding windows for small kernels, via separable kernels for
+    # Gaussian-like filters, and via FFT for very large kernels
+    # apply filters per channel for color images,
+    # and be mindful of color-space linearity (sRGB vs linear RGB)
+    # edge detection: Sobel (gradient magnitude from two derivative kernels) is simple and effective;
+    # for production use, consider Canny for better, more reliable edges
+    # for large images, do tile/block processing and prefer separable filters or FFT where appropriate to keep memory in check
+
+    # this chapter should give you the hands-on tools to process images directly with Numpy,
+    # prototype filters, and build simple computer-vision pipelines without leaving a notebook
+       
+
+
+#
+# CH 16: Time-series analysis
+#
+
+if True:
+    # time series are everywhere: sensor logs, financial ticks, server metrics, sales by day
+    # working with them well means two things:
+    # (a) having the right sliding-window tools to compute rolling statistics effectively, and
+    # (b) preparing features and labels for forecasting models in a way that respects time order (no peeking into the future)
+    # this chapter gives you practical, copy-ready Numpy recipes for
+    # moving averages, fast rolling statistics, autocorrelation via FFT, and turning series into supervised learning data for forcasting
+    # wherever helpful I include notes about numerical stability, NaNs, and when to prefer Pandas or Scipy utilities
+
+    # 16.1 rolling windows and moving averages
+    # a rolling window computes a function (mean, std, sum...) over a sliding block of consecutive values
+    # there are several implementation strategies - choose based on speed, memory, and how you want to treat edges/NaNs
+
+    # 16.1.1 simple moving average (SMA) - cumsum trick (fast & low memory)
+    # this is the go-to for fixed-size windows
+    # complexity is O(n) and memory overhead is minimal
+    import numpy as np
+    def moving_average_cumsum(x: np.ndarray,
+                              window: int) -> np.ndarray:
+        # compute moving average with given window (simple, non-centered)
+        # returns array of length n - window + 1 (valid mode)
+        x = np.asarray(x, dtype=float)
+        if window < 1:
+            raise ValueError('window must be >= 1')
+        n = x.shape[0]
+        if window > n:
+            return np.array([])
+        cumsum = np.cumsum(x, dtype=float)
+        # pad with zero at start to make indices line up
+        cumsum = np.concatenate([[0.0], cumsum])
+        # moving sums: cumsum[i+window] - cumsum[i]
+        mov_sum = cumsum[window:] - cumsum[:-window]
+        return mov_sum / window
+    # example
+    x = np.arange(10.0)
+    print(moving_average_cumsum(x, 3))
+    # alignment note:
+    # the result above corresponds to windowed averages at indicies i..i+window-1 and is shorter than input
+    # to produce a same-length result, pad frond/back with np.nan or use centerd windows (see below)
+
+    # 16.1.2 same-length and centered moving averages
+    # if you want the result to line up with the original index (same legnth),
+    # pad with nans at the start (and end for centered) or use symmetric padding before running cumsum
+    def moving_average_same(x, window):
+        ma_valid = moving_average_cumsum(x, window)
+        pad_left = window - 1       # number of missing values at start
+        return np.concatenate([np.full(pad_left, np.nan), ma_valid])
+    x = np.arange(10.0)
+    print(moving_average_same(x, 3))
+    # for centered window of odd length k,
+    # you can pad (k/2) on both sides and run cumsum (or use sliding_window_view and take mean)
+
+    # 16.1.3 NaN-aware moving average
+    # when your series has np.nan values you want to ignore them:
+    def moving_average_nan(x, window):
+        x = np.asarray(x, dtype=float)
+        n = x.size
+        if window > n:
+            return np.full(n-window+1, np.nan)
+        # mask NaNs as 0 in sums, and cound valid entries
+        x0 = np.nan_to_num(x, nan=0.0)
+        cumsum = np.concatenate([[0,0], np.cumsum(x0)])
+        count = np.concatenate([[0], np.cumsum(~np.isnan(x)).astype(int)])
+        sums = cumsum[window:] - cumsum[:-window]
+        cnts = count[window:] - count[:-window]
+        with np.errstate(invalid='ignore', divide='ignore'):
+            return sums / cnts      # yields nan when cnts == 0
+    # this is important in real-world data where dropouts or missing readings are common
+
+    # 16.1.4 sliding windows with slide_window_view (expressive, more memory)
+    # sliding_window_view returns as view shaped (n-window+1, window), letting you compute arbitrary windowed functions vectorized (e.g., median, skew)
+    # it can use more memory for the extra axis but avoids python loops
+    import numpy.lib.stride_tricks as npl
+    def moving_median(x, window):
+        w = npl.sliding_window_view(x, window)  # shape (n-window+1, window)
+        return np.nanmedian(w, axis=1)
+    x = np.arange(10.0)
+    xm = moving_median(x, 3)
+    # this is great when you need non-linear window functins (median, quantiles)
+    # that don't have simple O(1) incremental formulars
+
+    # 16.1.5 exponential maving average (EMA)
+    # EMA is recursive
 
 
         
