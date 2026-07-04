@@ -4110,6 +4110,7 @@ if True:
             a = np.clip(a * 255.0, 0, 255.0).astype(np.uint8)
             Image.fromarray(a).save(path)
     #img_arr = load_image(path='./I0000163.jpg')
+    #save_image(img_arr, 'axial_mri.jpg')
     #plt.imshow(img_arr)
     #plt.show()
 
@@ -4126,14 +4127,221 @@ if True:
         r, g, b = rgb[..., 0], rgb[..., 1], rgb[..., 2]
         # standard Rec. 601 luma coefficients (approx)
         return 0.2989 * r + 0.5870 * g + 0.1140 * b
-    #img_arr = rgb2gray(load_image(path='./I0000163.jpg'))
+    #img_arr = rgb2gray(load_image(path='./axial_mri.jpg'))
     #plt.imshow(img_arr)
     #plt.show()
 
     # gamma warning
     # many images are stored in sRGB (gamma-corrected)
-    # strictly
+    # strictly speaking, you should linerize sRGB before doing linear filtering (blur, convolution)
+    # that means invert the sRGB gamma curve, filter, then reapply gamma
+    # for many quick EDA tasks and non-photorealistic processing you can ignore this,
+    # but be aware that brightening/dimming/blurring can look slightly different if gamma is ignored
 
+    # practical housekeeping
+    # encure arrays are C-contiguous for tight loops: arr = np.ascontiguousarray(arr)
+    # work in float32 to reduce memory and speed up float ops (GPUs often prefer float32)
+    # for really large images (multi-GB), consider memoty-mapped approaches (chapter 4) or process by tiles/blocks
+
+    # 15.2 filters and transformations
+    # filtering = local neighbor arithmetic (convolution)
+    # we'll implement convolution in several ways:
+    # a simple vectorized implementation using sliding_window_view,
+    # a separable approach for Gaussian-line kernels,
+    # and an FFT-based approach for large kernels
+
+    # build a Gaussian Kernal
+    import numpy as np
+    def gaussian_kernel(size=5, sigma=1.0):
+        # return a 2D Gaussian kernel (size x size) normalized to sum == 1
+        ax = np.arange(-size // 2 + 1, size//2 + 1)
+        xx, yy = np.meshgrid(ax, ax)
+        kernel = np.exp(-(xx**2 + yy**2) / (2.0*sigma**2))
+        kernel /= np.sum(kernel)
+        return kernel
+    # convolution with sliding_window_view (vectorized, good for small kernels)
+    # this produces no python loops and is efficient for small kernels because the kernel is tiny and the window array is a view
+    # (but note: the window array itself is large-ish in memory because it exposes an extra (H,W,k,k) dimension - tolerable for small kernels
+    import numpy.lib.stride_tricks as npl
+    def convolve2d(image, kernel, mode='same', pad='reflect'):
+        # 2D convolution for single-channel float image
+        # image: 2D array (H, W)
+        # kernel: 2D array (kh, kw)
+        # mode: 'same' or 'valid' (we return 'same' by default
+        # pad: padding mode passed to np.pad
+        image = np.asarray(image)
+        kh, kw = kernel.shape
+        pad_h = kh // 2
+        pad_w = kw // 2
+        padded = np.pad(image, ((pad_h, pad_h), (pad_w, pad_w)), mode=pad)
+        windows = npl.sliding_window_view(padded, (kh, kw))       # shape (H, W, kh, kw)
+        # elementwise multiply and sum
+        out = np.einsum('ijxy,xy->ij', windows, kernel)
+        if mode == 'same':
+            return out
+        elif mode == 'valid':
+            return out[pad_h:-pad_h or None, pad_w:-pad_w or None]
+        else:
+            raise ValueError('mode must be "same" or "valid"')   
+    #image = load_image('./axial_mri.jpg')
+    #out_image = convolve2d(image[:,:,0], gaussian_kernel(3))
+    #plt.imshow(out_image)
+    #plt.show()
+    # when to use this
+    # small kernels (3x3 ... 31x31) and moderate images (e.g., up to a few thousand pixels per side)
+    # easy to implement, vectorized, and avoids python loops
+
+    # separable convolution - faster & memory efficient for Gaussian-like kernels
+    # a 2D gaussian is separable:
+    # a 2D convolution can be done by convolving first along rows then along columns with 1D kernels
+    # this reduces cost from O(HW*k^2) to (HW*2k)
+    def convolve_separable(image, kernel_1d, pad='reflect'):
+        # kernel_1d: 1D array
+        # first convolve rows, then columns
+        k = kernel_1d.size
+        # convolve rows
+        # treat kernel_1d as (1, k) then (k, 1)
+        tmp = convolve2d(image, kernel_1d[None,:], pad=pad)
+        out = convolve2d(tmp, kernel_1d[:, None], pad=pad)
+        return out
+    # you can derive kernel_1d for a Gaussian via np.exp(-x**2/(2*sigma**2)) and normalize
+    #kernel_1d = np.arange(-2, 3, 1)
+    #kernel_1d = np.exp(-kernel_1d**2 / (2.0*1.0**2))
+    #kernel_1d /= np.sum(kernel_1d)
+    #image = load_image('axial_mri.jpg')
+    #out_img = convolve_separable(image[:,:,0], kernel_1d)
+    #plt.imshow(out_img)
+    #plt.show()
+
+    # FFT-based convolution (good for big kernels)
+    # for very large kernels or when kernel ~ image size,
+    # frequency-doamin convolution (FFT) is often faster
+    def fft_convolve2d(image, kernel):
+        # convolution via FFT;
+        # returns 'same' shape as image
+        # works for 2D float arrays
+        s1 = np.array(image.shape)
+        s2 = np.array(kernel.shape)
+        shape = s1 + s2 - 1
+        print(s1)
+        print(s2)
+        print(shape)
+        # FFT (use rfft for slightly bettwe perf on real inputs)
+        f_image = np.fft.rfftn(image, shape)
+        f_kernel = np.fft.rfftn(kernel, shape)
+        conv = np.fft.irfftn(f_image * f_kernel, shape)
+        # crop to original size (centered)
+        start0 = (s2[0] - 1) // 2
+        start1 = (s2[1] - 1) // 2
+        end0 = start0 + s1[0]
+        end1 = start1 + s1[1]
+        return conv[start0:end0, start1:end1]
+    #img = load_image('axial_mri.jpg')
+    #out_img = fft_convolve2d(img[:,:,0], gaussian_kernel())
+    #fig, ax = plt.subplots(1, 2, figsize=(10,5))
+    #ax[0].imshow(img)
+    #ax[1].imshow(out_img)
+    #plt.show()
+
+    # rule of thumb:
+    # use FFT convolution when kernel area is large relative to kernel support (e.g., k > 25..50)
+    # or when you do many convolutions with the same kernel (you can cache the kernel FFT)
+    # for small kernels, spatial convolution (sliding winow or separable) is usually faster
+
+    # applying filters to color images
+    # apply filters per channel (RGB): process each channel independently and stack back
+    def apply_filter_rgb(img_rgb, kernel, method='spatial'):
+        # img_rgb: float array in [0,1] shape (H,W,3)
+        out = np.empty_like(img_rgb)
+        for c in range(img_rgb.shape[2]):
+            channel = img_rgb[..., c]
+            if method == 'spatial':
+                out[..., c] = convolve2d(channel, kernel)
+            else:
+                out[..., c] = fft_convolve2d(channel, kernel)
+        return out
+    #img = load_image('axial_mri.jpg')
+    #out_img = apply_filter_rgb(img, gaussian_kernel())
+    #fig, ax = plt.subplots(1, 2, figsize=(10, 5))
+    #ax[0].imshow(img)
+    #ax[1].imshow(out_img)
+    #plt.show()
+    # you can also convert to a perceptually linear space (linearize sRGB)
+    # before filtering and convert back afterward for more correct photorealistic results
+
+    # 15.3 simple edge detection
+    # edge detectors respond to rapid changes in intensity
+    # the simplest and most instructive are gradient-based detectors like Sobel or Scharr,
+    # which approximate image derivatives and then compute gradient magnitude
+
+    # Sobel filter (classic)
+    # Sobel kernels:
+    kx = np.array([[-1, 0, 1], [-2, 0, 2], [-1, 0, 1]], dtype=float)
+    ky = kx.T
+    # compute gradients and magnitude:
+    def sobel_edges(gray):
+        # compute Sobel gradients and magnitude from a grayscale float image
+        gx = convolve2d(gray, kx)
+        gy = convolve2d(gray, ky)
+        mag = np.hypot(gx, gy)      # sqrt(gx**2 + gy**2)
+        # normalize magnitude to [0,1] for visualization
+        mag_norm = mag / (mag.max() + 1e-12)
+        orient = np.arctan2(gy, gx)     # radians
+        return gx, gy, mag_norm, orient
+    #img = rgb2gray( load_image('axial_mri.jpg') )
+    #gx, gy, mag_n, orien = sobel_edges(img)
+    #fig, ax = plt.subplots(2,3,figsize=(12,4))
+    #ax[0,0].imshow(img)
+    #ax[0,1].imshow(gx)
+    #ax[1,1].imshow(gy)
+    #ax[0,2].imshow(mag_n)
+    #ax[1,2].imshow(orien)
+    #plt.show()
+
+    # thresholding to get edges
+    # choosing a threshold on mag_norm (between 0 and 1) to get a binary edge map:
+    def simple_edge_map(mag_norm, threshold=0.2):
+        return (mag_norm > threshold).astype(np.uint8) * 255
+    #img = rgb2gray( load_image('axial_mri.jpg') )
+    #gx, gy, mag, orien = sobel_edges(img)
+    #mag_th1 = simple_edge_map(mag, threshold=0.2)
+    #mag_th2 = simple_edge_map(mag, threshold=0.5)
+    #fig, ax = plt.subplots(2, 2, figsize=(10,10))
+    #ax[0, 0].imshow(img)
+    #ax[0, 1].imshow(mag)
+    #ax[1, 0].imshow(mag_th1)
+    #ax[1, 1].imshow(mag_th2)
+    #plt.show()
+    
+    # choices for threshold:
+    # absolute threshold (e.g., 0.2) - quick and sometimes sufficient
+    # percentile-based (mag_norm > np.percentile(mag_norm, 90) - adapts to image contrast
+    # hysteresis (Canny) - more robust:
+    # two thresholds and connectivity;
+    # see skimage.feature.canny for production usuage
+
+    # color images and edges
+    # you can either:
+    # convert to grayscale and detect edges there (simple & common) or
+    # compute gradients per channel and combine
+    # (e.g., take maximum magnitude across channels) for color edge detection:
+    def edges_color_max(rgb):
+        # rgb: float array (H,W,3)
+        mag = []
+        for c in range(3):
+            _, _, mag, _ = sobel_edges(rgb[..., c])
+            mag.append(mag)
+        mag_max = np.maximum.reduce(mags)
+        return mag_max
+    # this captures edges that appear strongly in any color channel
+
+    # example end-to-end pipeline
+        
+
+
+
+        
+    
 
 
 
