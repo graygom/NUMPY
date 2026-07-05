@@ -4410,6 +4410,7 @@ if True:
     # this is the go-to for fixed-size windows
     # complexity is O(n) and memory overhead is minimal
     import numpy as np
+    import matplotlib.pyplot as plt
     def moving_average_cumsum(x: np.ndarray,
                               window: int) -> np.ndarray:
         # compute moving average with given window (simple, non-centered)
@@ -4476,12 +4477,182 @@ if True:
 
     # 16.1.5 exponential maving average (EMA)
     # EMA is recursive
+    # s_t = alpha * x_t + ( 1 - alpha ) * s_{t-1} with s_0 = x_0 or some initialization
+    # it is usually implemented as an O(n) loop because of the time dependence;
+    # this is fine for large series and is numerically stable
+    def exponential_moving_average(x, alpha):
+        x = np.asarray(x, dtype=float)
+        if not ( 0 < alpha <= 1 ):
+            raise ValueError('alpha must be in (0,1]')
+        out = np.empty_like(x)
+        out[0] = x[0]
+        for t in range(1, x.size):
+            out[t] = alpha * x[t] + ( 1 - alpha ) * out[t-1]
+        return out
+    # if performance becomes a concern, accelerate the loop with Numba (@njit) or
+    # implement as a linear filter via SciPy (lfilter) if available
 
+    # choose alpha: often choose alpha = 2 / (window + 1)
+    # to approximate a simple moving average of length window
 
-        
-    
+    # 16.1.6 rolling variance (fast via sums of squares)
+    # compute rolling variance using cumulative sums and cumulative sums of squares:
+    # var = 1 / w * sum x**2 - 1 / w * ( sum x )**2
+    def rolling_var_cumsum(x, window):
+        x = np.asarray(x, dtype=float)
+        n = x.size
+        if window > n:
+            return np.array([])
+        c1 = np.concatenate([[0.0], np.cumsum(x)])
+        c2 = np.concatenate([[0.0], np.cumsum(x*x)])
+        sum_x = c1[window:] - c1[:-window]
+        sum_x2 = c2[window:] - c2[:-window]
+        mean_x = sum_x / window
+        var = (sum_x2 - mean_x**2) / window
+        return var
+    #x = np.arange(100)
+    #var = rolling_var_cumsum(x, 5)
+    #plt.plot(x)
+    #plt.plot(var)
+    #plt.grid(ls=':')
+    #plt.show()
+    # for a sample (unbiased) variance use factor window / (window-1) if window > 1
 
+    # 16.1.7 rolling covariance and correlation
+    # use the same cumsum approach for pairs of series:
+    def rolling_cov_corr(x, y, window):
+        x = np.asarray(x, dtype=float)
+        y = np.asarray(y, dtype=float)
+        if x.size != y.size:
+            raise ValueError('x and y must have same length')
+        c_x = np.concatenate([[0.0], np.cumsum(x)])
+        c_x2 = np.concatenate([[0.0], np.cumsum(x*x)])
+        c_y = np.concatenate([[0.0], np.cumsum(y)])
+        c_y2 = np.concatenate([[0.0], np.cumsum(y*y)])
+        c_xy = np.concatenate([[0.0], np.cumsum(x*y)])
+        sum_x = c_x[window:] - c_x[:-window]
+        sum_x2 = c_x2[window:] - c_x2[:-window]
+        sum_y = c_y[window:] - c_y[:-window]
+        sum_y2 = c_y2[window:] - c_y2[:-window]
+        sum_xy = c_xy[window:] - c_xy[:-window]
+        mean_x = sum_x / window
+        mean_y = sum_y / window
+        var_x = (sum_x2 - mean_x**2) / window
+        var_y = (sum_y2 - mean_y**2) / window
+        cov = (sum_xy - mean_x*mean_y) / window
+        std_x = np.sqrt(var_x)
+        std_y = np.sqrt(var_y)
+        corr = cov / (std_x * std_y)
+        return cov, corr
+    #x = np.arange(10)
+    #y = np.arange(0,-10,-1)
+    #cov, corr = rolling_cov_corr(x, y, window=3)
+    #print(cov, corr)    
+    # this is useful for rolling correlation metrics (lead/lag relationships)
 
+    # 16.2 fast statistics and forecast preparation
+    # computing rolling statistics is half the job
+    # the other half is turning time-series into supervised data for forecasting,
+    # doing quick stationary transforms, and building validation schemes that respect time order
 
+    # 16.2.1 autocorrelation (fast via FFT)
+    # autocorrelation reveals repeating patterns and seasonality
+    # the naive O(n^2) algorithm is slow;
+    # use FFT to compute autocorrelation in O(n log n)
+    def autocorrelation_fft(x, nlags=None):
+        x = np.asarray(x, dtype=float)
+        n = x.size
+        if nlags is None:
+            nlags = n - 1
+        # subtract mean
+        x = x - x.mean()
+        # next power-of-two for zero-padding for efficiency (optional)
+        size = 1 << (2*n-1).bit_length()    # a safe upper bound; simpler: 2*n
+        print(size)
+        # compute FFT of zero-padded signal
+        f = np.fft.rfft(x, n=2*n)
+        ps = f * np.conjugate(f)
+        acf = np.fft.irfft(ps, n=2*n)[:n]
+        acf /= acf[0]   # normalize by lag-0
+        return acf[:nlags+1]
+    # example
+    x = np.sin(2*np.pi*np.arange(200)/20.0) + 0.2*np.random.randn(200)
+    acf = autocorrelation_fft(x, nlags=50)
+    #plt.plot(x)
+    #plt.plot(acf)
+    #plt.show()
+    # interpretation:
+    # peaks at non-zero lags indicate periodicity;
+    # a strong autocorrelation at lag s suggests seasonality of period s
 
+    # 16.2.2 differencing and stationary prep
+    # a common step to make a series  stationary (remove trend/ seasonality) is differencing
+    # first difference: y'_t = y_t - y_{t-1}
+    # seasonal difference (period s): y'_t = y_t - y_{t-s}
+    def difference(x, lag=1):
+        x = np.asarray(x, dtype=float)
+        return x[lag:] - x[:-lag]
+    # differencing is a cheap way to remove linear trend or periodic seasonal structure and is commonly used before autogressive modeling
+
+    # 16.2.3 creating lag features for supervised models (sliding windows -> X, y)
+    # to forecast h steps ahead using the lasp p values,
+    # turn the series into rows where inputs are previous p observations (lags) and target is the point h ahead
+    import numpy.lib.stride_tricks as npl
+    def make_supervised(x,
+                        p: int,
+                        h: int = 1):
+        # build supervised dataset for forecasting
+        # x: 1D array of length n
+        # p: number of lag features
+        # h: forecast horizon (1 means next-step)
+        # returns
+        # X: shape (n-p-h+1, p) where each row = [x_t, x_{t+1}, ..., x_{t+p-1}]
+        # y: shape (n-p-h+1,  ) corresponding to x_{t+p+h-1}
+        x = np.asarray(x, dtype=float)
+        n = x.size
+        m = n - p - h + 1
+        if m <= 0:
+            return np.empty((0, p)), np.empty((0,))
+        windows = npl.sliding_window_view(x, window_shape=p+h)  # shape (m, p+h)
+        print(windows.shape)
+        X = windows[:, :p]
+        y = windows[:, p + h - 1]
+        return X, y
+    # example: p=5 lags, h=1
+    X, y = make_supervised(np.arange(20.0), p=5, h=1)
+    print(X.shape, y.shape)
+    # this gives you a standard supervised dataset you can feed to any ML algorithm (linear models, tree resembles, neural nets)
+    # use scaling computed on training rows only
+
+    # 16.2.4 walk-forward validation (time-aware CV)
+    # standard random cross-validation is invalid for time series because it leaks future information
+    # use walk-forward (rolling-origin) evaluation:
+    # 1. split data by time into sequential blocks
+    # 2. for fold i, train on data up to time t_i and evaluate on a following window (t_i+1, ..., t_i+k)
+    # 3. slide t_i forward and repeat
+    # sketch
+    def  walk_forward_splits(n_samples, initial_train, test_size, step):
+        # generate (train_idx, test_idx) for walk-forward eval
+        # initial_train: initial training size (int)
+        # test_size: size of each test block
+        # step: step to advance training window each fold
+        start = initial_train
+        while start + test_size <= n_samples:
+            train_idx = np.arange(start)
+            test_idx = np.arange(start, start+test_size)
+            yield train_idx, test_idx
+            start += step
+    # often you standardize using statistics computed on the training set of each fold
+    # (fit scalars on train_idx before trainsforming test_idx)
+
+    # 16.2.5 seasonal features and calendar encoding
+    # time series often have calendar effects (day-of-week, hour-of-day)
+    # convert timestampts to cyclical numeric features:
+    def cyclical_features(timestamps, period_seconds):
+        # timestamps: array of POSIX seconds (or any seconds)
+        # period_seconds: e.g., 86400 for daily cycle, 604800 for weekly
+        # returns two columns: sin(theta), cos(theta)
+        theta = (timestamps % period_seconds) / period_seconds * 2 * np.pi
+        return np.sin(theta), np.cos(theta)
+    # these two features encode periodicity without discontinuities at cycle boundaries (e.g., midnight)
 
