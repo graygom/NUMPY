@@ -4656,3 +4656,100 @@ if True:
         return np.sin(theta), np.cos(theta)
     # these two features encode periodicity without discontinuities at cycle boundaries (e.g., midnight)
 
+    # 16.2.6 feature engineering recipes for forecasting
+    # common, effective features for predictive models:
+    # lag features: last p values (use make_supervised)
+    # rolling aggregations: mean, std, min, max over recent windows (fast using cumsum methods)
+    # EMA: captures decaying memory
+    # seasonal indicators: one-hot or cyclical encodings for hour/day/month
+    # trend: running linear fit slope in a window (estimate via covariance/OLS on indices)
+    # holiday flags/special events: domain-specific and often critical
+
+    # example: build a small feature matrix:
+    def build_features(x, timestamps, p=12, window=24, alpha=0.2):
+        # lag
+        X_lag, y = make_supervised(x, p=p, h=1)
+        # rolling mean over last window points before prediction
+        # align windows so each row in X_lag corresponds to the same time
+        start = x.size - X_lag.shape[0] - (p-0)     # careful alignment; simpler: recompute loops
+        # for brevity, one simple approach is to compute rolling mean full-length and slice
+        rm = np.concatenate([np.full(window-1, np.nan), moving_average_cumsum(x, window)])
+        rm = rm[-X_lag.shape[0]:]   # align to supervised rows
+        # ema of full series then slice
+        ema_full = exponential_moving_average(x, alpha)
+        ema = ema_full[-X_lag.shape[0]:]
+        # cyclical time-of-day (if timestamps in seconds)
+        sin_t, cos_t = cyclical_features(timestamps[-X_lag.shape[0]:], period_seconds=86400)
+        # stack: lags, rm, ema, cyclical features
+        X = np.hstack([X_lag, rm.reshape(-1, 1), ema.reshape(-1, 1), sin_t.reshape(-1, 1), cos_t.reshape(-1, 1)])
+        return X, y
+    # (edge alignment is fiddly in practice - careful indexing is essential.
+    #  Pandas often makes this easier by aligning on timestamps)
+
+    # 16.2.7 quick anomaly detection via rolling z-score
+    # a simple anomaly detector
+    # compute rolling mean and std, then flag point with |z|>threshold
+    def rolling_zscore_anomaly(x, window=50, thresh=3.0):
+        ma = moving_average_nan(x, window)
+        var = rolling_var_cumsum(x, window)
+        std = np.sqrt(var)
+        # align ma and std to same length as valid zone
+        # we returned valid-length arrays earlier
+        # here, for brevity, align manually
+        # (production code should handle indices precisely)
+        valid_len = ma.size
+        z = (x[window-1:] - ma) / (std + 1e-12)
+        anomalies = np.where(np.abs(z) > thresh)[0] + (window - 1)
+        return anomalies, z
+    # this often good for flagging spikes and dropouts quickly
+
+    # practical advice & pitfalls
+    # don't shuffle time series
+    # random shuffling destroys temporal order and creates impossible leaks
+    # use walk-forward or time-based train/test splits
+    # be explicit about alignment
+    # when you compute moving stats and then build lagged features,
+    # confirm the produced row corresponds to the exact timestamp you intend to predict
+    # off-by-one errors are common
+    # NaN handling matters
+    # decide how to treat missing values (impute, mask, or skip windows)
+    # and be consistent between training and inference
+    # stationarity vs interpretability
+    # differencing helps modeling but destroys level interpretability
+    # if you need level forecasts, remember to invert differencing after prediction
+    # start simple
+    # moving averages and lagged linear models are strong baselines
+    # only escalate to complex models (LSTM, Prophet, Prophet-like implementations, transformers)
+    # after simple models prove insufficient
+    # performance
+    # prefer cumsum tricks for fixed window, FFT for autocorrelation,
+    # and sliding_window_view for nonlinear window functions
+    # when recurrence or indexing makes loops unavoidable
+    # use Numba to accelerate
+
+    # personal note
+    # for short-term, high-frequency forecasting I often begin with an EMA + AR(1) baseline and walk-forward evaluation
+    # if a complex model (e.g., gradient-boosted trees on lag + rolling features) only marginally beats the baseline,
+    # i prefer the simpler model for production reliability
+
+    # key takeaways
+    # use cumsum and cumsum-of-squares tricks to compute rolling mean and variance in O(n) with low memory;
+    # use sliding_window_view when you need median or other nonlinear window functions
+    # EMA captures decaying influence of older data
+    # implement as a simple recurrence or accelerate with Numba/Scipy filters
+    # autocorrelation vis FFT is fast and useful for detecting seasonality;
+    # look for peaks in the ACF to choose seasonal lag features
+    # convert series to supervised data with sliding window (make_supervised) to train standard ML models;
+    # ensure perfect time alignment and train-only fitting of scalers
+    # for model evaluation use walk-forward or rolling-origin cross-validation
+    # avoid random shuffles
+    # feature engineering (lags, rolling aggregates, cyclical time features, trend estimates)
+    # is often more important than a complex model
+    # persist preprocessing artifacts and keep strict separation between training and test periods
+
+
+
+
+
+
+
