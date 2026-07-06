@@ -13,6 +13,35 @@ from typing import Optional, Tuple
 
 
 #
+# Appendices
+#
+# these appendices are designed to serve as quick reference, troubleshooting guide, and a gateway to further exploration
+# they work both as a post-reading refresher adn as a set of resources you can dip into while working on real projects
+
+# appendix A: Numpy Cheat Sheet
+# a single-stop reference to the core array operations and idioms you will use daily
+# it is intentionally concise - think of it as the greatest hits of Numpy
+
+if True:
+    # array creation
+    np.array([1,2,3])   # from python list
+    np.zeros((3,4))     # all zeros
+    np.ones((2,2), dtype=np.float32)    # all ones
+    np.eye(4)                   # identity matrix
+    np.arange(0, 10, 2)         # 0, 2, 4, 6, 8
+    np.linspace(0,1,5)          # 5 evenly spaced numbers
+    np.random.default_rng(seed=0).normal(size=(3,3))
+
+    # inspection
+    arr = np.random.default_rng(seed=0).normal(size=(10,10))
+    print(arr.shape)        # tuple of dimensions
+    print(arr.ndim)         # number of axes
+    print(arr.size)         # total elements
+    print(arr.dtype)        # data type
+    print(arr.itemsize)     # bytes per element
+
+
+#
 # CH 1: Getting Started with Numpy
 #
 
@@ -4393,7 +4422,7 @@ if False:
 # CH 16: Time-series analysis
 #
 
-if True:
+if False:
     # time series are everywhere: sensor logs, financial ticks, server metrics, sales by day
     # working with them well means two things:
     # (a) having the right sliding-window tools to compute rolling statistics effectively, and
@@ -4746,6 +4775,7 @@ if True:
     # feature engineering (lags, rolling aggregates, cyclical time features, trend estimates)
     # is often more important than a complex model
     # persist preprocessing artifacts and keep strict separation between training and test periods
+
 
 
 
