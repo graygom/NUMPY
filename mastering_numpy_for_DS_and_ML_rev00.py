@@ -40,7 +40,34 @@ if True:
     print(arr.dtype)        # data type
     print(arr.itemsize)     # bytes per element
 
+    # indexing & slicing 
+    print(arr[0, 1])                    # element at row 0, col 1
+    print(arr[:, 2])                    # all rows, column 2
+    print(arr[::2])                     # every other element
+    print(arr[arr>0.5])                 # boolean mask
+    print(arr[np.ix_([0,2], [1,3]) ])   # fancy indexing with row/col lists
 
+    # shape manipulation
+    arr.reshape(2,50)
+    arr.T                   # transpose
+    arr.ravel()             # flatten (view)
+    a = np.zeros([2,3])
+    b = np.ones([2,3])
+    c = np.concatenate([a, b], axis=0)
+    c = np.vstack([a, b])
+    print(c)
+    d = np.stack([a, b], axis=1)
+    d = np.hstack([a, b])
+    print(d)
+
+    # computation
+    arr + 5
+    a * b                   # element-wise
+    np.dot(a[0],b[0])       # inner product
+    np.mean(a, axis=0)
+    np.std(a)
+    np.sum(a, axis=(0,1))
+    
 #
 # CH 1: Getting Started with Numpy
 #
