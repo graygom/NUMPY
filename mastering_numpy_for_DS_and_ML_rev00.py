@@ -13,16 +13,16 @@ from typing import Optional, Tuple
 
 
 #
-# Appendices
+# === Appendices
 #
 # these appendices are designed to serve as quick reference, troubleshooting guide, and a gateway to further exploration
 # they work both as a post-reading refresher adn as a set of resources you can dip into while working on real projects
 
-# appendix A: Numpy Cheat Sheet
+# === appendix A: Numpy Cheat Sheet
 # a single-stop reference to the core array operations and idioms you will use daily
 # it is intentionally concise - think of it as the greatest hits of Numpy
 
-if True:
+if False:
     # array creation
     np.array([1,2,3])   # from python list
     np.zeros((3,4))     # all zeros
@@ -61,22 +61,386 @@ if True:
     print(d)
 
     # computation
-    arr + 5
-    a * b                   # element-wise
-    np.dot(a[0],b[0])       # inner product
-    np.mean(a, axis=0)
-    np.std(a)
-    np.sum(a, axis=(0,1))
-    
-#
-# CH 1: Getting Started with Numpy
-#
+    print(arr + 5)
+    print(a * b)                   # element-wise
+    print(np.dot(a[0],b[0]))       # inner product
+    print(np.mean(b, axis=0))
+    print(np.std(b))
+    print(np.sum(b, axis=(1)))
+
+    # broadcasting
+    # shapes must be compatible:
+    # dimensions either match or one of them is 1
+    # example: (10, 1) + (1, 5)  -> (10, 5)
+
+    # random
+    rng = np.random.default_rng(seed=42)
+    a = rng.normal(loc=0.0, scale=1.0, size=1000)
+    b = rng.choice(np.arange(10), size=3, replace=False)
+
+    # linear algebra
+    A = np.array([[1,2,3],[2,3,4],[4,4,5]])
+    print(np.linalg.inv(A))
+    print(np.linalg.eig(A))
+    print(np.linalg.svd(A, full_matrices=False))
+
+    # saving/loading
+    np.save('data.npy', a)
+    a2 = np.load('data.npy')
+    np.savetxt('data.csv', a, delimiter=',')
+    np.loadtxt('data.csv', delimiter=',')
+
+    # keep this sheet near your keyboard
+    # it cover 90% of daily tasks
+
+# === Appendix B: common pitfalls and best practices
+# even experienced user fall into these traps
+# recognizing them early saves debugging
 
 if False:
-    
-    # verify installation version
-    print(np.__version__)
+    # 1. views vs. copies
+    # pitfall: modifying a slice unexpectedly changes the original array
+    # fix: use .copy() when you need independence
+    a = np.arange(10)
+    b = a[0:3]          # view
+    b[0] = 9            # changes a!
+    b = a[0:3].copy()   # safe
 
+    # 2. broadcasting surprise
+    # misaligned shapes may broadcast in unexpected ways
+    # e.g., (3,) + (3,1)
+    # always check .shape before arithmetic
+
+    # 3. mixing dtypes
+    # integer division vs. float division can cause silent truncation
+    # set dtype=float when creating arrays for numerical work
+    
+    # 4. looping in pure python
+    # writing for loops over array elements defeats numpy's purpose
+    # best practice:
+    # vectorize or use np.apply_along_axis / numba
+
+    # 5. memory spikes
+    # temporary arrays from chained operations can double memory use
+    # use in-place ops (a *= 2) or out= parameter when possible
+    
+    # 6. random number legacy API
+    # prefer the modern numpy.random.Generator over
+    # the old grobal np.random for reproducibility
+
+    # 7. over-indexing
+    # fancy indexing returns a copy, not a view
+    # mutations won't affect original
+
+    # 8. floating-point realities
+    # don't test equality of floats
+    # use np.close
+    
+# === appendix C: glossary of key terms
+# a short dictionary for quick recall
+
+# array (ndarray)
+# core numpy object representing an N-dimensional, homogeneous data block
+
+# axis
+# dimension along which operations are performed;
+# axis 0 is the first dimension (rows),
+# axis 1 is the second dimension (columns), etc
+
+# broadcasting
+# rule set allowing operations on arrays for different but compatible shapes
+
+# contiguous array
+# an array whose data os stored without gaps in memory, enabling fast access
+
+# dtype
+# data type of array elements
+# e.g., float64, int32
+
+# fancy indexing
+# indexing with integer arrays or boolean masks that returns a copy
+
+# stride
+# number of bytes to step in each dimension when traversing an array
+
+# uFunc (universal function)
+# a numpy function that operates element-wise on arrays and supports broadcasting
+
+# vectorization
+# rewriting computations to use whole-array operations instead of python loops
+
+# this glossary ensures you never have to guess what a numpy term means
+
+# === appendix D: resource and further reading
+# keep learning with these trusted sources:
+
+# official & core
+# numpy documentation: numpy.org/doc - authoritative and frequently updated
+# numpy github: source code, issues, upcoming features
+
+# books & guides
+# python data science handbook (by Jake VanderPlas) - a broad foundation
+# elegant SciPy (by Oliphant et al.) - dives deeper into scientific workflows
+
+# tutotials & courses
+# numpy user guide - official tutorials and quickstarts
+# coursera / edX courses on scientific python and data analysis
+# scipy2024 conference talks (YouTube) for cutting-edge techniques
+
+# communitiy
+# stack overflow ([numpy] tag) - active Q&A for real-world problems
+# numpy mailing list and GitHub discussions for advanced topics
+
+# related libraries
+# SciPy - for specialized scientific algorithms
+# Pandas - for tabular data manipulation
+# CuPy, Numba - for high-performance/GPU computing
+
+# === appendix E: index
+# a traditional back-of-book index is invaluable when you're mid-project and need to find that one command or explanation
+# entries would include concepts, functions, and examples with page references in the print or PDF edition
+# sample (illustrative) entries:
+
+# array broadcasting: 75 ~ 82
+# cummulative sum (cumsum): 45, 146
+# data type (dtype): 18, 33, 271
+# fancy indexing: 96 ~ 101
+# linear algebra > eigenvalues: 189 ~ 191
+# linear algebra > maxtrix multiplication: 180 ~ 184
+# memory mapping: 132 ~ 134
+# random number generation: 210 ~ 222
+# rolling window statistics: 314 ~ 321
+# vectorization techniques: 256 ~ 265
+
+# the final index in the published book will map all important terms and code references to their page numbers for instant lookup
+
+# === final notes
+# these appendices complete the book by givin you:
+
+# immediate recall (cheat sheet)
+# avoidance of traps (pitfall & best practices)
+# precise language (glossary)
+# next steps for mastery (resources)
+# fast lookup (index)
+
+# think of them as your numpy survival kit
+# tools you'll use long after you finish the last project chapter
+
+# === a word from the author
+# thank you for joining me on this numpy journey
+# writing this book was a labor of curiosity and case,
+# and I hope it has sparked the same excitement in you
+
+# keep exploring - tweak the code, break it, fix it and make it your own
+# real understanding comes form experimenting beyond the examples
+
+# if you found this book helpful, i'd be gratefull for your feedback
+# a short review or a quick note helps other learners discover it and guides future updates
+
+# most of all, keep learning and creating
+# your next project could be the one that inspires others
+
+
+# === preface
+# when i first began exploring data science, i saw numpy as little more than an installation requirement
+# i imported it only because Pandas or scikit-learn demanded it, rarely pausing to ask how those libraries performed their calculation so quickly
+# that causal relationship worked for a while - until my own projects started to strain under the weight of larger datasets and more complex computations
+# my code ran, but it ran slowly
+# memory ballooned
+# the fixes i tried felt like patchwork 
+
+# the turning point came when i examined the heart of those higher-level libraries
+# and discovered that the real power had always been hiding in plain sight: numpy
+# i still remember the moment when a sluggish loop that once tool minutes was replaced by
+# a single vectorized array operation that finished in the blink of an eye
+# it wasn't just faster
+# it was clearer, more elegant, and easier to maintain
+# that experience reshaped the way I approached data science, and it revealed something fundamental:
+# to master the python data ecosystem, you must first master numpy
+
+# this book was born from that realization
+# over years of teaching and collaborating with colleagues, i noticed a pattern
+# mamy talented analysts and developers use numpy passively
+# they import it because other packages require it, but they never learn its deeper capabilities
+# yet every time someone takes the time to truly understand numpy arrays
+# how they store data, how broadcasting works, how memory is laid out - their entire workflow changes
+# code that once relied on nested loops becomes a single, elegant expression
+# analyses that once pushed the limits of a laptop suddenly feel effortless
+
+# mastering numpy for data science and machine learning is my attempt to share that transformation
+# it is practical at its core
+# you will start with fundamentals such as array creation, indexing, and broadcasting
+# then move through vectorizaiton, memory optimization, and integration with the broader python ecosystem
+# each chapter is built around real examples and short exercises designed for immediate application
+# whether you are a researcher migrating from MABLAB,
+# a python developer aiming to oprimize production code,
+# or a newcomer eager to build high-performance data workflows,
+# this book will help you think in arrays and write code that is both powerful and concise
+
+# writing a technical book is never a solitary effort
+# i am indebted to the open-source community whose dedication makes numpy possible,
+# to the educators and colleagues who encourged me to teach what i had learned,
+# and to the readers like you who continue to push the boundaries of what python can achieve
+# my hope is that these pages will serve as both a reference and a source of inspiration,
+# guiding you toward a deeper understanding of scientific computing in python
+
+# if his book succeeds, it will not simply teach you how to use numpy
+# it will change the way you think about data, computation, and performance
+# once you start to see your problems as operations on arrays,
+# you will find solutions that are faster, more elegant, and - perhaps most rewarding - more fun to create
+# Mike J. Maxwell 2025
+
+
+# === introduction
+# welcome to mastering numpy for data science and machine learning
+# this book is designed to give you as deep, practical understanding of numpy - the fundamental library that powers numerical computing in python
+# before we dive into arrays and advanced techniques, it is worth setting the stages:
+# clarifying the purpose of the book, identifying the audience, preparing the tools you'll need,
+# describing how to work with the code examples, and situating numpy within the broader python ecosystem
+
+# purose of this book
+# at its heart, this book is about mastering the array-based approach to computation
+# numpy is for more than a helper library;
+# it is the engine that drives python's entire data science stack
+# when you call a pandas method, fit a model in scikit-learn, or train a neural network in tensorflow,
+# you are ultimately relying on the data structures and operations provided by numpy
+
+# many programmers use numpy only indirectly, but direct proficiency unlocks unique advantages
+# by understanding how arrays are stored in memory, how broadcasting works, and how to vectorize operations, you will be able to:
+# manipulate massive datasets with speed and efficiency
+# replace complex nested loops with consice, readable vectorized code
+# build or customize machine-learning algorithms from first principles
+# troubleshoot and optimize high-level libraries because you understand the foundation beneath them
+
+# the goal is not just to teach you a list of functions,
+# but to cultivate an array mindset - a way of thinking about data that makes large-scale computation intuitive
+
+# who this book is for
+# this text assumes basic python fluency
+# variables, functions, loops, and familiarity with lists or dictionaries
+# beyond that, no specialized background is required
+# high school algebra is sufficient for the mathematical sections,
+# and key ideas such as linear algebra operations are explained as the appear
+
+# you may find this book especially valuable if you are:
+# a data analyst or scientist
+# who regularly works with pandas or other analytical tools and wants to make your workflows faster and more memory-efficient
+# an engineer or researcher
+# moving from MATLAB, R, Julia, or excel who needs the flexibility of python without sacrificing performance
+# an software developer
+# who wants a deeper understanding of the libraies that underpin modern AI and data pipelines
+
+# whether you are a student building your first project or a professional optimizing production systems,
+# numpy mastery will pay dividends across your career
+
+# prerequisites and tools
+# all you need to begin is a recent version of Python (>=3.9) and the latest stable release of numpy
+# a modern development environment - such as JupyterLab, VS code, or PyCharm
+# will make experimentation easier, but any editor you are comfortable with will work
+
+# a recommended quick setup:
+#python -m venv numpy_env
+#source numpy_env/bin/activate      # windows: numpy_env\Script\activate
+#pip install numpy jupyterlab
+
+# throughout the book, we will occasionally use supplementary libraries such as matplotlib for visualization or pandas for comparison
+# these will be introduced and installed as needed
+
+# if you are new to virtual environments
+# this book's early chapters will guide you through creating one so that your python setup remains clean and producible
+
+# how to use the code examples
+# this book is meant to be read with a keyboard close at hand
+# each chapter includes short, runnable code snippets and end-of-chapter exercises
+# the best way to learn is to type the examples yourself, modify parameters, and observe the results
+
+# a comparison github repository provides jupyter notebooks for every example and project
+# use these to double-check your work, revisit key sections, or experiment freely without feat of breaking anything
+# if you encounter unexpected results, treat them as learning opportunities:
+# examine the array shapes, inspect intermediate variables, and explore numpy's rich set of diagnostic tools
+# real understanding often comes from these small detours
+
+# overview of the numpy ecosystem
+# numpy as the central hub of scientific computing in python
+# its core object, the multidimensional array (ndarray), offers a compact and efficient repersentation of numerical data
+# around this core is an ecosystem of libraries that rely on numpy for their fundamnetal operations:
+# pandas
+# builds its dataframe structure on top of numpy arrays, allowing high-level data manipulation
+# scipy
+# uses numpy for advanced numerical algorithms in optimization, integration, and signal processing
+# scikit-learn
+# implememts machine-learning algorithms that accept and output numpy arrays
+# tensorflow, pytorch
+# adapt the same concepts for deep learning, drawing on numpy-style broadcasting and vectorization
+# matplotlib
+# and other visualization libaries convert numpy arrays directly into plots and interactive dashboards
+
+# because numpy sits at the foundation of this entire stack, learning it well gives you a permanent advantages
+# you will not only be able to use these tools more efficiently but also understand their internal logic,
+# making it easier to extend or optimize them for your own needs
+
+# by the time you finish this introduction, your environment will be ready,
+# your expectations set, and your first arrays only a few keystrokes away
+# in part 1:foundartion of numpy, we will begin with the essential building blocks
+# creating arrays, understanding their structure, and learning how to manipulate them efficiently
+# from there, we will move steadily toward advanced topics such as broadcasting, vectorization,
+# and high-performance computing, ensuring that each concept builds naturally on the last
+
+# welcome to the world of high-performance array computing
+# let's get started
+
+
+#
+# === CH 1: Getting Started with Numpy
+#
+# before you harness the power of numpy for serious data science or machine learning,
+# you need a strong grounding in its basic concepts and tools
+# this chapter lays that foundation
+# we'll
+
+# setup a clearn python environment and install numpu
+# explore the core building block, the ndarray, and see why it ourperforms native python lists
+# learn the most useful ways to create arrays from scratch
+# understand how numpy handles data types and conversions
+# master indexing and slicing so you can access and manipulate data efiiciently
+
+# by the end you will have a working toolkit - and the confidence - to start real analysis projects
+
+if False:
+    # == 1.1 installing python and numpy
+    # numpy requires python 3.9 or newer,
+    # while you can technically install it system-wide
+    # it's best practice to create a virtual environment so your experiments don't interfere with other projects
+
+    # 1. install python (if you haven't already)
+    # windows: download the official installer from python,org
+    # macos, linux: use your package manager or brew install python
+
+    # 2. create and activate a virtual environment
+    #python -m venv numpy_env
+    #activate > windows: numpy_env\Scripts\activate
+    #activate > macos, linux: source numpy_env/bin/activate
+    # your command prompt should now show (numpy_env) to indicate the environment is active
+
+    # 3. install numpy and jupyterlab
+    #pip install --upgrade pip
+    #pip install numpy jupyterlab
+    # Jupyterlab lets you run notebooks that mix code, results, and narrative
+    # a perfect match for the examples in this book
+
+    # 4. verify installation
+    print(np.__version__)
+    # if you see a version number (e.g., 2.1.x or later), you're ready to roll
+    # tips: if you already use anaconda or miniconda, you can create a conda environment instread:
+    #conda create -n numpy_env numpy jupyterlab
+    #conda activate numpy_env
+    # either approach isolates your work and ensures reproduciablility
+
+    #== 1.2 understanding the ndarray object
+    # the heart of numpy is the n-dimensional array, or ndarray
+    # think of it as a homogeneous, multidimensional spreadsheet in memory
+    # but far faster and more flexible than python's built-in lists
+    
     # native python list CPU time = 6.43e-1sec @Lenovo M70q i5-10400T 6-CPUs (2020)
     nat_list = list( range(10_000_000) )
     start_time = time.time()
