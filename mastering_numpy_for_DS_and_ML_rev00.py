@@ -440,90 +440,124 @@ if False:
     # the heart of numpy is the n-dimensional array, or ndarray
     # think of it as a homogeneous, multidimensional spreadsheet in memory
     # but far faster and more flexible than python's built-in lists
-    
+
+    # let's compare:
     # native python list CPU time = 6.43e-1sec @Lenovo M70q i5-10400T 6-CPUs (2020)
-    nat_list = list( range(10_000_000) )
+    # native python list CPU time = 6.19e-1sec @Lenovo X280 i5-8350U 4-CPUs (2018)    
+    nat_list = list( range(10_000_000) )    # native python list
     start_time = time.time()
     sum(x*x for x in nat_list)
     end_time = time.time()
     print('Native python list CPU time = %.2e' % (end_time - start_time) )
-
     # numpy array CPU time = 3.81e-2sec @Lenovo M70q i5-10400T 6-CPUs (2020)
-    np_array = np.arange(10_000_000)
+    # numpy array CPU time = 2.19e-2sec @Lenovo X280 i5-8350U 4-CPUs (2018)
+    np_array = np.arange(10_000_000)    # numpy array
     start_time = time.time()
     np.sum(np_array*np_array)
     end_time = time.time()
     print('Numpy array CPU time = %.2e' % (end_time - start_time) )
+    # on most machines, numpy finishes in a fraction of the time because:
+    # contiguous memory: data is stored in a single typed block
+    # vectorized operations: arithmetic runs in compiled C code, not python loops
 
+    # each array has key attributes:
     # numpy array a (2 rows x 3 columns)
     a = np.array( [ [1,2,3], [4,5,6] ])
-    print('Numpy array a shape:', a.shape)
-    print('Numpy array a ndim:', a.ndim)
-    print('Numpy array a size:', a.size)
-    print('Numpy array a dtype:', a.dtype)
+    print('Numpy array a shape:', a.shape)      # (2,3)
+    print('Numpy array a ndim:', a.ndim)        # 2
+    print('Numpy array a size:', a.size)        # 6
+    print('Numpy array a dtype:', a.dtype)      # int
     print('Numpy array a itemsize:', a.itemsize, 'bytes')
+    # numpy's efficiency flows from this strict, typed structure
 
+    # == 1.3 array creation methods
+    # you rarely build arrays by hand
+    # numpy provides many factory functions to generate data quickly and reproducibly
+    # from existing python objects
     # numpy array creation
     array_1 = np.array( [1,2,3] )               # from list
     array_2 = np.array( (1,2,3), float )        # from tuple, specify dtype
+    # convenience constructors
     array_3 = np.zeros( (3, 4) )                # 3x4 matrix of zeros
     array_4 = np.ones( 5 )                      # vector of ones
     array_5 = np.full( (2, 3), 7 )              # filled with constant
     array_6 = np.eye(4)                         # 4 x 4 identity matrix
+    # ranges and evenly spaced values
     array_7 = np.arange(0, 10, 2)               # start, stop, step
     array_8 = np.linspace(0, 1, 5)              # start, stop, num
-
-    # random number API
+    # random numbers (modern Generator API)
     rng = np.random.default_rng(seed=42)
-    rng.integers(0, 10, size=(2,3))             
+    rng.integers(0, 10, size=(2,3))             # integer 0~9     
     rng.normal(loc=0, scale=1, size=10)         # standard normal
-    
-    # data type
+    # these high-level constructors are not only faster but also
+
+    # === 1.4 data types and casting
+    # every ndarray has a data type (dtype) that determines
+    # the kind of data (integer, float, complex, bool, fixed-length string, etc.)
+    # how many bytes each element occupies
+    # how arithmetic is performed
     ints16 = np.array( [1, 2, 3], dtype=np.int16)
     floats32 = np.array( [1.0, 2.0, 3.0], dtype=np.float32)
     print(ints16.dtype, floats32.dtype)
     print(ints16.itemsize, 'bytes', floats32.itemsize, 'bytes')
-
+    # choosing a smaller dtype can cut memory usage dramatically
+    # important when working with gigabytes of data
     # type conversion
     array = np.array([1.0, 2.0, 3.0])
-    ints = array.astype(np.int32)
+    ints = array.astype(np.int32)       # truncate decimals
     print(array.dtype, array.itemsize, 'bytes')
     print(ints.dtype, ints.itemsize, 'bytes')
-
+    # casting always returns a new array; the original remains unchanged
+    # numpy will also upcast automatically in mixed operations to avoid losing precision:
     # operation, upcasting automatically
-    array_add = np.array([1,2,3]) + np.array([1.5])
+    array_add = np.array([1,2,3]) + np.array([1.5])     # result is float64
     print(array_add, array_add.dtype, array_add.itemsize)
+    # being mindful of dtype saves headaches when you integrate with libraries such as pandas or tensorflow
 
-    # indexing and slicing
+    # === 1.5 basic indexing and slicing
+    # selectring data is where the ndarray shines
+    # you can think of indexing as a more powerful version of python's list slicing
+
+    # one-dimensional arrays
     v = np.arange(10)
-    print(v[0], v[-1], v[2:7:2], v.dtype, v.itemsize)
-    m = np.arange(12).reshape(3,4)
-    print(m[1,2], m[0:2, 1:4], m[:,0])
+    print(v[0], v[-1], v[2:7:2], v.dtype, v.itemsize)   # first, last, slice with step
+    # two or more dimensions
+    m = np.arange(12).reshape(3,4) 
+    print(m[1,2], m[0:2, 1:4], m[:,0])  # , submatrix, first column
+    # slicing returns a view, not a copy, so changes propagate:
     sub = m[0:2, 1:3].copy()
     sub[0,0] = 99
     print(m, sub)
-
+    # use m.copy() when you need and independent copy
     # Boolean masks
-    mask = m % 2 == 0
-    print(m, mask, m[mask])
+    mask = m % 2 == 0 
+    print(m, mask, m[mask])     # even numbers
+    # masking enables expressive, loop-free filtering and conditional assignments:
     m[m<5] = -1
     print(m)
 
     # Fancy indexing
+    # numpy also supports arrays of indices:
     rows = np.array([0, 2])
     cols = np.array([1, 3])
-    print(m, m[rows, cols])
+    print(m, m[rows, cols])             # picks (0,1), (0,3), (2,1), (2,3)
     print(m, m[rows[:,None], cols])
+    # this broadcasting of index arrays allows complex data selection in a single line
 
-    # pulling it all together
+    # putting it all together
+    # here's a short script combining these techniques:
     rng = np.random.default_rng(seed=123)
     data = rng.normal(loc=50, scale=15, size=(6,6)).astype(np.float32)
     mean_val = data.mean()
-    high = data[data>mean_val]
+    high = data[data>mean_val]      # select values above the mean
     print(f'dataset mean: {mean_val:.2f}')
     print(f'values above mean: {high}')
     print(f'high-value mean: {high.mean():.2f}')
+    # in less than a dozen lines,
+    # we created random data, inspected its dtype, filtered it with a Boolean mask,
+    # and computed statistics - all without explicit loops
 
+    # key takeaways
 
 
 #
