@@ -558,15 +558,39 @@ if False:
     # and computed statistics - all without explicit loops
 
     # key takeaways
+    # the ndarray is the backbone of scientific python
+    # contiguous memory, typed elements, and vectorized operations make it vastly faster than python lists
+    # numpy's array-creation functions (zeros, ones, arange, linspace, random generators)
+    # let you build data structures quickly and reproducibly
+    # understanding and contorlling dtype is critical for both performance and precision
+    # indexing, slicing, boolean masks, and fancy indexing allow powerful, concise data selection
 
+    # you now possess the core skills to handle numerical data efficiently
+    # in the next chapter we'll extend these basics into array mathematics and broadcasting,
+    # the features that unlock numpy's legendary speed in real-world analytics and machine-learning tasks
 
 #
-# CH 2: Core Array Operations
+# === CH 2: Core Array Operations
 #
+# in chapter 1 you learned how to create and inspect numpy array
+# now it's time to make those arrays do real work
+# the hallmark of numpy is the ability to apply rich mathematical operations to entire datasets in a single, fast expression
+# this chapter explores those capabilities in depth:
+
+# element-wise arithmetic - fast, vectorized calculations across whole arrays
+# universal functions (ufuncs) - high-performance implementations of common mathematical operations
+# reductions and aggregations - efficient ways to summerize large datasets
+# comparisons and boolean masks - powerful tools for filtering and conditional logic
+
+# as we go, you'll see how these concepts blend into a style of 'array thinking'
+# that replaces many explicit python loops with clear, high-level code
 
 if False:
-
-    # element-wise arithmetics
+    # ===2.1 element-wise arithmetics
+    # when you add, substract, multiply, or divide numpy arrays, the operations happen element by element
+    # instread of looping in python, numpy executes the work in optimized C,
+    # often using low-level vector instructions that exploit modern CPUs
+    
     a = np.array([2, 4, 6])
     b = np.array([1, 3, 5])
     print(' a = ', a, a.dtype, ' b = ', b, b.dtype)
@@ -574,42 +598,66 @@ if False:
     print(' a - b = ', a - b)
     print(' a * b = ', a * b)
     print(' a / b = ', a / b)
+
+    # scalars mix in naturally
     print(' a + 10 = ', a + 10)
     print(' a * 0.5 = ', a * 0.5)
 
-    # broadcasting
+    # broadcasting: arithmetic with different shapes
+    # sometimes you need to combine arrays of different dimensions
+    # numpy's broadcasting rules make this seamless as long as the shapes are compatible
     mat = np.arange(6).reshape(2, 3)
     vec = np.array([10, 20, 30])
     print(mat)
     print(vec)
     print(mat+vec)
+    # here the 1D vector is stretched across each row of the 2D matrix without copying data
+    # broadcasting generalizes to higher dimensions, provided that each dimension either matches or is 1
 
-    # universal functions (ufuncs)
+    # expert insight
+    # designing your data shapes to fit broadcasting patterns often eliminates entire classes of loops
+    # and temporary arrays, saving both time and memory
+    
+    # === 2.2 universal functions (ufuncs)
+    # many mathematical operations - squre root, trigonometric functions, exponentials -
+    # are implemented as universal functions, or ufuncs
+    # these are vectorized C routines that apply element-wise and return a new array
     x = np.linspace(0, 2*np.pi, 6)
     print('x:', x)
     print('sin(x):', np.sin(x))
     print('exp(x):', np.exp(x))
     print('sqrt(x):', np.sqrt(x))
 
+    # ufuncs can take multiple arrays:
     u = np.array([1,2,3])
     v = np.array([4,5,6])
-    print(np.maximum(u, v))
-    print(np.power(u, v))
-    
+    print(np.maximum(u, v))     # element-wise
+    print(np.power(u, v))       # element-wise
+
+    # they also support in-place computation using the out parameter to avoid extra memory allocation:
     res = np.empty_like(u)
     print(res)
     np.add(u, v, out=res)       # in-place computation
     print(u, v, res)
-    
+
+    # because ufuncs are composable, you can build complex formulas in a single expression:
     result = np.sin(x)**2 + np.cos(x)**2
     print(result)
 
+    # custom vectorized functions
+    # when a needed operation isn't built-in,
+    # you can wrap a python function with np.vectorized for convenience:
     def triple(x):
         return 3*x
     triple_vec = np.vectorize(triple)       # improving readability, not give the full C-level speed
     print(triple_vec([1,2,3]))
-
+    # vectorize mainly improves readability;
+    # it doesn't give the full C-level speed of a true ufunc, but it's handy for quick experimentation
     # reductions and aggregations
+
+    # === 2.3 reductions and aggregations
+    # often you need to summerize an array - computing totals, means, or other statistics
+    # numpy provides efficient reductions that traverse the data only once
     rng = np.random.default_rng(seed=42)
     data = rng.normal(size=(4,5))
     print('total sum:', data.sum())
@@ -617,57 +665,119 @@ if False:
     print('column means:', data.mean(axis=0))
     print('row means:', data.mean(axis=1))
 
+    # key reduction methods include:
+    # sum, prod - total or product of elements
+    # mean, std, var - basic statistics
+    # min, max, argmin, argmax - extremes and their indices
+    # cumsum, cumprod - cumulative sums and products
+
+    # axis arguments control which dimension to collapse:
     print('std. dev. by cols:', data.std(axis=0))
     print('cum. sum by rows:', data.cumsum(axis=1))
     print(data)
 
+    # you can chain reductions to compute complex metrics concisely:
     z_scores = ( data - data.mean(axis=0) ) / data.std(axis=0)
     print(data)
     print(data.mean(axis=0))
     print(z_scores)
 
-    # comparisons and Boolean masks
+    # because reductions operate in compiled code,
+    # they handle millions of elements quickly and with low memory overhead
+
+    # === 2.4 comparisons and Boolean masks
+    # comparisons on arryas return boolean arrays of the same shape
+    # these masks enable expressive filtering and conditional operations
     array = np.array([ [1,5,3],
                        [7,2,9] ])
     mask = array > 4
     print(mask)
 
+    # use the maks to select or modify data:
     print('values > 4:', array[ mask ])
     array[mask] = 0
     print('after masking:', array)
 
+    # logical operators work element-wise:
     cond = (array % 2 == 0) | (array == 1)
     print('even or equal to 1:', array[cond])
 
+    # masks integrate naturally with reductions:
     positive_mean = array[array>0].mean()
     print('mean of pos. entries:', positive_mean)
 
+    # fancy indexing
+    # for more complex selections,
+    # fancy indexing let you pass integer arrays as indices:
     rows = np.array([0, 1])
     cols = np.array([1, 2])
     print(rows[:,None])                     # column vector
-    print(array[rows[:,None],cols])
+    print(array[rows[:,None],cols])         # cross-selection
+    # this makes it easy to grab arbitrary elements or reorder data in a single statement
 
+    # personal note
+    # when i began using boolean masks, my data-cleaning scripts shrank by half
+    # replacing nested for loops with one or two vectorized conditions feels almost like cheating
+    # yet it's both faster and clearer
 
+    # key takeaways
+    # element-wise arithmetics and broadcasting
+    # ley you compute on entire datasets without explicit python loops
+    # universal functions (ufuncs)
+    # provide fast, memory-efficient implementations of mathematical operations and can be composed for complex formulars
+    # reductiona and aggregations (such as sum, mean, std)
+    # quickly summarize large arrays along any axis with minimal memory usage
+    # comparisons, boolean masks, and fancy indexing
+    # offer concise, high-performance ways to filter and rearrange data
+
+    # with these tools you can express sophisticated numerical computations in just a few lines of readable code
+    # one of the main reasons numpy underpins the entire python data ecosystem
+    # in the next chapter we'll expand this skill set by exploring array reshaping and data restructuring,
+    # giving you precise control over how data flows through your analyses
 
 #
-# CH 3: Shape and data management
+# === CH 3: Shape and data management
 #
+# data scientists often talk about clearning or wrangling data,
+# but in numpy the first real challenge is usually getting the shape right
+# the same numbers arranaged differently can representing a time series, and image, a stack of features, or a batch of training samples
+# learning to control shape, memory layout, and broadcasting in therefore essential
+# not just for correctness but for speed and clarity
+
+# this chapter is a deep dive into those skills
+# we'll move well beyond a quick 'how-to' and explore why numpy behaves the way it does,
+# with practical code you can paste into a notebook and run as you read
+# you'll discover how to:
+# reshape and reorder data efficiently
+# combine and split arrays without nunecessary copying
+# master broadcasting to eliminate loops
+# detect when arrays share memory and choose between views and copies to balance speed and safety
 
 if False:
-
-    # reshaping, transposing, and flattening
+    # == 3.1 reshaping, transposing, and flattening
+    # why shape matters
+    # every ndarray stores its data as a one-dimensional block of memory, plus metadata - the shape and strides -
+    # that tells numpy how to interpret that block as an n-dimensional object
+    # changing the shape usually just changes those metadata pointers
+    # done right, reshaping is instantaneous and memory-free
     a = np.arange(12)
-    print(a.shape)
-    b = a.reshape(3, 4)
+    print(a.shape)          # (12, )
+    b = a.reshape(3, 4)     # no copy if possible
     print(b)
-    col = a.reshape(12, -1)
-    row = a.reshape(-1, 12)
+
+    # reshape is the workhorse
+    # use -1 to let numpy infer a dimension:
+    col = a.reshape(12, -1)     # (12, 1)
+    row = a.reshape(-1, 12)     # (1, 12)
     print(col)
     print(row)
     print(np.shares_memory(a, b))           # check memory status
     print(np.shares_memory(a, col))         # check memory status
     print(np.shares_memory(a, row))         # check memory status
-
+    # tip:
+    # if you reshape frequently in performance-critical code
+    # check np.share_memory(a, b) to ensure you're not silently copying large arrays
+    
     # flattening, raveling
     f = b.flatten()
     print(np.shares_memory(b, f))           # check memory status
@@ -5200,6 +5310,7 @@ if False:
     # feature engineering (lags, rolling aggregates, cyclical time features, trend estimates)
     # is often more important than a complex model
     # persist preprocessing artifacts and keep strict separation between training and test periods
+
 
 
 
