@@ -777,77 +777,109 @@ if False:
     # tip:
     # if you reshape frequently in performance-critical code
     # check np.share_memory(a, b) to ensure you're not silently copying large arrays
-    
+
     # flattening, raveling
+    # flatten() always returns a copy:
     f = b.flatten()
     print(np.shares_memory(b, f))           # check memory status
+    # ravel() returns a view when it can, saving memory:
     r = b.ravel()
     print(np.shares_memory(b, r))           # check memory status
     print(b)
     r[0] = 99
     print(b)
-
+    
     # transposing, axis moves
-    t = b.T
+    # matrix transposition is just stride manipulation:
+    a = np.arange(12)
+    b = a.reshape(3, 4)     # no copy if possible
+    t = b.T                             # view, shape (4,3)
     print(np.shares_memory(b, t))
     swapped = np.swapaxes(b, 0, 1)
     print(b)
     print(swapped)
     print(np.shares_memory(b, swapped))
-    moved = np.moveaxis(b, 0, -1)
+    moved = np.moveaxis(b, 0, -1)       # move first axis to end
     print(b)
     print(moved)
     print(np.shares_memory(b, moved))
+
+    # beside the scenes, numpy adjusts strides - the byte steps between elements
+    # check them:
     print(b.strides, t.strides)
+    # non-contiguous stride can impact downstream libraries that expect C-contiguous memory
+    # call np.ascontiguousarray when required:
     safe = np.ascontiguousarray(t)              # C-contiguous memory
     print(b.strides, t.strides, safe.strides)
-
+    # insight
+    # early in my career i lost a day debugging a machine-learning pipeline
+    # because a Fortran-ordered slice wasn't contiguous
+    # a single call to np.ascontiguousarray fixed it - lesson learned
+    
     # concatenating, splitting, and stacking
+    # real datasets rarely arrive as one tidy block
+    # you'll often merge tables, append new observations, or break arrays apart
     A = np.arange(6).reshape(2,3)
     B = np.arange(6, 12).reshape(2,3)
     print(A)
     print(B)
-    rows = np.concatenate([A, B], axis=0)
+    rows = np.concatenate([A, B], axis=0)   # add rows
     print(rows)
-    cols = np.concatenate([A, B], axis=1)
+    cols = np.concatenate([A, B], axis=1)   # add columns
     print(cols)
-    stacked = np.stack([A, B], axis=0)
+    # create a new axis with stack
+    stacked = np.stack([A, B], axis=0)      # shape (2, 2, 3)
     print(stacked)
     print(stacked.shape)
-
-    vstack = np.vstack([A, B])
-    hstack = np.hstack([A, B])
-    cstack = np.column_stack([A, B])
+    # shorthands:
+    vstack = np.vstack([A, B])          # vertical, add rows
+    hstack = np.hstack([A, B])          # horizontal, add columns
+    cstack = np.column_stack([A, B])    # add columns
     print(vstack)
     print(hstack)
     print(cstack)
 
+    # splitting
     X = np.arange(12).reshape(3,4)
-    rows = np.split(X, 3, axis=0)
+    rows = np.split(X, 3, axis=0)       # equal parts
     print(rows)
-    cols = np.split(X, 4, axis=1)
+    cols = np.array_split(X, 3, axis=1)     # unequal allowed
     print(cols)
-
+    # because these operations usually return views, they are cheap
+    # however, if shapes differ and numpy must allocate new block, it will copy
+    # example: joining sensor streams
     sensor1 = np.random.rand(1000, 5)
     sensor2 = np.random.rand(1000, 3)
-    X = np.hstack([sensor1, sensor2])
+    X = np.hstack([sensor1, sensor2])       # shape (1000, 8), add columns
     print(sensor1[0], sensor2[0], X[0])
     print(np.shares_memory(sensor1, X))
+    # no loops, no wasted memory
 
+    # === 3.3 broadcasting rules and patterns
+    # broadcasting lets you perform arithmetic on arrays of different shapes without manual replication
+    # rules:
+    # 1. compare shapes form the trailing dimensions
+    # 2. dimensions are compatible when equal or one in 1
+    # 3. the result shape is the maximum along each dimension
+    # examples speak louder:
     # broadcasting rules and patterns
     M = np.arange(6).reshape(2, 3)
     print(M.dtype, M.itemsize)
     v = np.array([10, 20, 30])          # row vector
-    print(M + v)
+    print(M + v)                        # row-wise addition
     col = np.array([1,2])[:,None]       # column vector
-    print(M + col)
+    print(M + col)                      # column-wise addition
 
-    a = np.arange(3)[:, None]           # column vector
-    b = np.arange(4)[None, :]           # row vector
-    grid = a + b
+    # for pairwise operations, insert new axes:
+    a = np.arange(3)[:, None]           # column vector, (3,1)
+    print(a, a.shape)
+    b = np.arange(4)[None, :]           # row vector, (1,4)
+    print(b, b.shape)
+    grid = a + b                        # shape (3,4)
     print(grid.shape)
     print(grid)
 
+    # real pattern: pairwise distances
     A = np.random.rand(5, 3)
     B = np.random.rand(4, 3)
     diff = A[:, None, :] - B[None, :, :]
@@ -856,43 +888,77 @@ if False:
     print(B)
     print(diff)
     print(dist)
+    # this eliminates nested loops and can handle millions of pairs efficiently
+    # caution: broadcasting can create huge virtual arrays
+    # a (10000,1) + (1,10000) operation conceptually expands to (10000,10000) - 100million elements
+    # watch your RAM when dimensions are large
 
-    # views vs. copies and memory considerations
-    x = np.arange(9)
-    s = x[::3]
-    print(np.shares_memory(x, s))
-
-    m = np.arange(6).reshape(2, 3)
+    # === 3.4 views vs. copies and memory considerations
+    # understanding memory sharing is critical:
+    # views share data. slicing, transposing, most reshape calls
+    # copies own their own data. flatten, copy, np.array(..., copy=True)
+    # check with:
+    x = np.arange(9)                # (9,)
+    s = x[::3]                      # (3,)
+    print(x.shape, s.shape)
+    print(np.shares_memory(x, s))   # True
+    
+    # strides reveal how numpy walks memory:
+    m = np.arange(6).reshape(2, 3)      # (2,3)
     print(m.strides)                    # bytes to move along each axis
 
+    # non-contiguous array may force hidden copies when passed to C/Fortran code
+    # use:
     if not m.flags['C_CONTIGUOUS']:
-        m = np.ascontiguousarray(m)     # non-contiguous arrays may force hidden copies when passed to C/Fortran code
+        m = np.ascontiguousarray(m)
+    print(m.strides)
 
+    # memory footprint
     big = np.ones((1_000_000,), dtype=np.float64)
-    print(big.nbytes / 1e6, 'MB')
+    print(big.nbytes / 2**20, 'MB')
+    # use smaller dtypes (float32, int16) when precision allows
 
+    # in-place operations
     array = np.ones(5)
-    array *= 3.0            # in-place operations
+    array *= 3.0            # no new array, in-place operations
     print(array)
+    # these save memory but preserve dtype, which can truncate floats it the array is integer
 
-    mm = np.memmap('data.at', dtype='float32', mode='w+', shape=(10000, 1000))
+    # beyond RAM: memory mapping
+    mm = np.memmap('data.dat', dtype='float32', mode='w+', shape=(10000, 1000))
     mm[:] = np.random.rand(10000, 1000)
-    print(mm.nbytes/1e6, 'MB')
+    print(mm.nbytes/2**20, 'MB')
     mm.flush()
+    # memory-mapped arrays hehave like regular arrays while streaming data from disk
+    # ideal for terabyte-scale sets, though disk I/O is slower
 
+    # key takeaways
+    # shape is metadata
+    # reshape and transpose usually cost nothing if you understand views and strides
+    # stacking and splitting
+    # let you merge or break apart data efficiently; know when they copy
+    # broadcasting
+    # replaces explicit loops and is fundamental to idiomatic numpy
+    # views vs copies
+    # determine both performance and correctness - always know which you have
+    # monitor memory layout and dtype
+    # for speed and footprint, and use np.memmap when data outgrows RAM
 
+    # matering these patterns frees you to think in arrays instead of loops,
+    # which is exactly the mindset that powers high-performance data science with numpy
 
 #
-# CH 4: Input and output
+# === CH 4: Input and output
 #
+# working with data means reading from and writing to files
+# in numpy-land you'll encounter a variety of formats - simple text files, efficient binary loops,
+# memory-mapped array for huge datasets, and structured storage like HDF5
+# this chapter explains the practical tools you'll use every day, why to choose one format over another,
+# and how to avoid common pitfalls
+# each subsection contains complete, ready-to-run examples and small, practical recipes you can drop into a notebook
 
 if False:
-    # working with data means reading from and writing to files
-    # in NumPy-level you'll encounter a variety of formats - simple text files, efficient binary blobs, memory-mapped arrays for huge datasets, and structured storage like HDF5
-    # this chapter explains the practical tools you'll use everyday, why to choose one format over another, and how to avoid common pitfalls
-    # each subsection contains complete, ready-to-run examples and small, practical recipes you can drop into a notebook
-    
-    # 4.1 reading and writing text and binary files
+    # === 4.1 reading and writing text and binary files
     # Numpy supports multiple on-disk representations
     # use text files for interoperability and human inspection; prefer binary formats for speed, exactness, and compactness
 
