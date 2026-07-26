@@ -152,3 +152,68 @@ if False:
     print(A @ T[:,0])
     print(A @ T[:,1])
 
+
+#
+# ME564 Lec - 07, 08
+#
+
+if False:
+    # suspend variables
+    A = [ [ 3.0, -1.0],
+          [-1.0,  3.0] ]
+    A = np.array(A, dtype=float)
+    # solve eigenvalues, eigenvectors 
+    D_vec, T_mat = np.linalg.eig( A )
+    # finding inverse
+    T_inv_mat = np.linalg.inv( T_mat )
+    T_inv_mat = T_mat.T.conj()
+    # vector operation
+    E_vec = np.exp( D_vec )
+    # convert vector to matrix
+    D_mat = np.diag( E_vec )
+    print(D_mat)
+
+
+#
+# ME564 Lec - 09, 10, 11
+#
+
+if True:
+    # system (degenerate system)
+    A = [ [-0.009,  1.0 ],
+          [   0.0, -0.01] ]
+    A = np.array(A, dtype=float)
+    # time
+    t = np.linspace(0.0, 1000.0, 10001)
+    # solutions
+    sol = np.zeros((2,10001), dtype=float)
+    # ode45
+    for index in range(10001):
+        if index == 0:
+            sol[:,index] = [0.0, 1.0]
+        else:
+            dt = t[index] - t[index-1]
+            sol[:,index] = sol[:,index-1] + A @ sol[:,index-1] * dt
+    # visualization
+    fig, ax = plt.subplots(2,1,figsize=(6,4))
+    ax[0].plot(t, sol[0,:], label='pos.')
+    ax[1].plot(t, sol[1,:], label='vel.')
+    ax[0].grid(ls=':')
+    ax[1].grid(ls=':')
+    ax[0].legend(fontsize=9)
+    ax[1].legend(fontsize=9)
+    plt.tight_layout()
+    plt.show()
+    # solve eigenvalues, eigenvectors
+    D, T = np.linalg.eig(A)
+    print(D)
+    print(T)
+    xi1 = T[:,0]
+    xi2 = T[:,1]
+    print(xi1)
+    print(xi2)
+
+
+
+
+
