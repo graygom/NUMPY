@@ -8,6 +8,8 @@
 
 
 import numpy as np
+import scipy as sc
+import sympy as sy
 import matplotlib.pyplot as plt
 
 
@@ -178,7 +180,7 @@ if False:
 # ME564 Lec - 09, 10, 11
 #
 
-if True:
+if False:
     # system (degenerate system)
     A = [ [-0.009,  1.0 ],
           [   0.0, -0.01] ]
@@ -204,6 +206,7 @@ if True:
     ax[1].legend(fontsize=9)
     plt.tight_layout()
     plt.show()
+    
     # solve eigenvalues, eigenvectors
     D, T = np.linalg.eig(A)
     print(D)
@@ -212,6 +215,58 @@ if True:
     xi2 = T[:,1]
     print(xi1)
     print(xi2)
+
+    # system 
+    A = [ [1.0, 1.0],
+          [0.0, 1.0] ]
+    A = np.array(A, dtype=float)
+    D, T = np.linalg.eig(A)
+    print(D)
+    print(T)
+    xi1 = T[:,0]
+    xi2 = T[:,1]
+    print(xi1)
+    print(xi2)
+
+
+#
+# ME564 Lec - 12, 13
+#
+
+if True:
+    # dynamic equations
+    A = np.array( [ [  0.0,  1.0 ],
+                    [ -1.0, -0.1 ] ], dtype=float)
+    B = np.array( [ [ 0.0 ],
+                    [ 1.0 ] ], dtype=float)
+    # measurements
+    C = np.eye(2, dtype=float)
+    D = np.array( [ [ 0.0 ],
+                    [ 0.0 ] ], dtype=float)
+    # making system
+    system = sc.signal.StateSpace(A, B, C, D)
+
+    # impulse
+    t, y = sc.signal.impulse(system)
+    plt.plot(t, y, 'o:')
+    plt.grid(ls=':')
+    plt.show()
+    plt.close()
+    
+    # triangular control input
+    t = np.linspace(0.0, 50.0, 5001, dtype=float)
+    u = np.zeros(5001)
+    u[1001:2001] = t[:1000] / 1e5
+    u[2001:3001] = u[2000] - t[:1000] / 1e5
+
+    # simulate continuous time domain system
+    t_out, y_out, x_out = sc.signal.lsim(system, u, t)
+
+    # visualization
+    plt.plot(t, u)
+    plt.plot(t_out, y_out)
+    plt.show()
+
 
 
 
