@@ -233,7 +233,7 @@ if False:
 # ME564 Lec - 12, 13
 #
 
-if True:
+if False:
     # dynamic equations
     A = np.array( [ [  0.0,  1.0 ],
                     [ -1.0, -0.1 ] ], dtype=float)
@@ -266,6 +266,108 @@ if True:
     plt.plot(t, u)
     plt.plot(t_out, y_out)
     plt.show()
+
+
+#
+# ME564 Lec - 14, 15
+#
+
+if False:
+    # numerical differentiation 1
+    dt = 0.4
+    t = np.arange(-2.0, 4.0+dt, dt)
+    f = np.sin(t)
+    dfdt = np.cos(t)
+    # forward difference
+    dfdt_FD = ( np.sin(t+dt) - np.sin(t) )/ dt
+    # backward difference
+    dfdt_BD = ( np.sin(t) - np.sin(t-dt) )/ dt
+    # central difference
+    dfdt_CD = ( np.sin(t+dt) - np.sin(t-dt) )/ (2*dt)
+    # visualization
+    plt.plot(t, f, 'k--', label='function', linewidth=1.2)
+    plt.plot(t, dfdt, 'k', label='exact derivative', linewidth=3.0)
+    plt.plot(t, dfdt_FD, 'b', label='forward diff', linewidth=1.2)
+    plt.plot(t, dfdt_BD, 'g', label='backward diff', linewidth=1.2)
+    plt.plot(t, dfdt_CD, 'r', label='central diff', linewidth=1.2)
+    plt.grid(ls=':')
+    plt.legend(fontsize=9)
+    plt.tight_layout()
+    plt.show()
+    plt.close()
+
+    # numerical differentiation 2
+    dx = 0.1
+    x = np.arange(0.1, 3.0+dx, dx)
+    f = np.sin(x)
+    dfdx = np.cos(x)    # analytic derivative
+    #
+    dfdx_diff = np.zeros(len(x), dtype=float)
+    dfdx_diff[0] = (f[1] - f[0]) / (x[1] - x[0])                # forward difference
+    dfdx_diff[1:-1] = (f[2::] - f[:-2:]) / (x[2::] - x[:-2:])   # central difference
+    dfdx_diff[-1] = (f[-1] - f[-2]) / (x[-1] - x[-2])           # backward difference
+    #
+    rng = np.random.default_rng(seed=0)                             # random number generator
+    f_noise = f + rng.normal(loc=0.0, scale=0.01, size=x.size)      # normal distribution
+    #
+    dfdx_diff_noise = np.zeros(len(x), dtype=float)
+    dfdx_diff_noise[0] = (f_noise[1] - f_noise[0]) / (x[1] - x[0])                # forward difference
+    dfdx_diff_noise[1:-1] = (f_noise[2::] - f_noise[:-2:]) / (x[2::] - x[:-2:])   # central difference
+    dfdx_diff_noise[-1] = (f_noise[-1] - f_noise[-2]) / (x[-1] - x[-2])           # backward difference
+
+    # visualization
+    fig, ax = plt.subplots(1,2,figsize=(9,4))
+    ax[0].plot(x, f, 'k', linewidth=2, label='func.')
+    ax[0].plot(x, f_noise, 'ro:', linewidth=1, label='func. w/ noise')
+    ax[0].grid(ls=':')
+    ax[0].legend(fontsize=9)
+    ax[1].plot(x, dfdx, 'k', label='analytic derivative', linewidth=2)
+    ax[1].plot(x, dfdx_diff, 'g:', label='numerical diff.', linewidth=1.0)
+    ax[1].plot(x, dfdx_diff_noise, 'ro:', label='numerical diff. w/ noise', linewidth=1.0)
+    ax[1].grid(ls=':')
+    ax[1].legend(fontsize=9)
+    plt.tight_layout()
+    plt.show()
+    plt.close()
+
+
+#
+# ME564 Lec - 16
+#
+
+if True:
+    # numerical integration 1
+    a, b, dx = 0.0, 10.0, 0.2
+    x = np.arange(a, b+dx, dx, dtype=float)     # vector
+    f = np.sin(x)                               # vector
+    # left rectangle
+    f_left = f[:-1]
+    f_left_int = np.cumsum( f_left * (x[1:]-x[:-1]) )
+    # right rectangle
+    f_right = f[1:]
+    f_right_int = np.cumsum( f_right * (x[1:]-x[:-1]) )
+    # trapezoidal integration
+    f_trapezoidal = f[:-1] + (f[1:]-f[:-1])/2.0
+    f_trapezoidal_int = np.cumsum( f_trapezoidal * (x[1:]-x[:-1]) )
+    # Simpson's rule
+    f_simpson = (f[:-2:2] + 4.0*f[1:-1:2] + f[2::2])/3.0
+    f_simpson_int = np.cumsum( f_simpson * (x[2::2]-x[:-2:2])/2.0 )
+    # visualization
+    fig, ax = plt.subplots(1, 2, figsize=(9,4))
+    ax[0].plot(x, f, 'k', label='func', linewidth=2.0)
+    ax[0].step(x, f, 'ro:', label='post', where='post')
+    ax[0].grid(ls=':')
+    ax[0].legend(fontsize=9)
+    ax[1].plot(x[:-1], f_left_int, 'r', label='left rect', linewidth=1.0)
+    ax[1].plot(x[:-1], f_right_int, 'g', label='right rect', linewidth=1.0)
+    ax[1].plot(x[:-1], f_trapezoidal_int, 'b', label='trapezoidal', linewidth=1.0)
+    ax[1].plot(x[1::2], f_simpson_int, 'k', label='Simpson', linewidth=1.0)
+    ax[1].grid(ls=':')
+    ax[1].legend(fontsize=9)
+    plt.tight_layout()
+    plt.show()
+    plt.close()
+    
 
 
 
