@@ -335,7 +335,7 @@ if False:
 # ME564 Lec - 16
 #
 
-if True:
+if False:
     # numerical integration 1
     a, b, dx = 0.0, 10.0, 0.2
     x = np.arange(a, b+dx, dx, dtype=float)     # vector
@@ -367,6 +367,48 @@ if True:
     plt.tight_layout()
     plt.show()
     plt.close()
+
+
+#
+# ME564 Lec - 17
+#
+
+if True:
+    # damping oscillator conditions
+    w = 2.0*np.pi
+    d = 1.75
+    # system
+    A = np.array( [ [   0.0,      1.0 ],
+                    [ -w**2, -2.0*d*w ] ], dtype=float )
+    # timeline
+    dt = 0.001
+    t = np.arange(0.0, 10.0+dt, dt, dtype=float)
+    # solution
+    sol_f = np.zeros([2, t.size], dtype=float)
+    sol_b = np.zeros([2, t.size], dtype=float)
+    # forward/backward Euler scheme
+    for index in range(t.size):
+        if index == 0:
+            # initial condition
+            sol_f[:,0] = [2.0, 0.0]
+        else:
+            # time evolution
+            sol_f[:,index] = (np.eye(2) + dt * A) @ sol_f[:,index-1] 
+    # visualization
+    fig, ax = plt.subplots(1, 2, figsize=(5,4))
+    ax[0].plot(t, sol_f[0,:], label='x(t)')
+    ax[0].plot(t, sol_f[1,:], label='v(t)')
+    ax[1].plot(sol_f[0,:], sol_f[1,:], label='phase plot')
+    ax[0].grid(ls=':')
+    ax[1].grid(ls=':')
+    ax[0].legend(fontsize=9)
+    ax[1].legend(fontsize=9)
+    plt.tight_layout()
+    plt.show()
+    plt.close()
+
+
+
     
 
 
