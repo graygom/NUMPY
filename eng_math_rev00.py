@@ -11,6 +11,7 @@ import numpy as np
 import scipy as sc
 import sympy as sy
 import matplotlib.pyplot as plt
+import PIL
 
 
 #
@@ -373,15 +374,18 @@ if False:
 # ME564 Lec - 17
 #
 
-if True:
+if False:
     # damping oscillator conditions
     w = 2.0*np.pi
-    d = 1.75
+    d = 0.5
     # system
     A = np.array( [ [   0.0,      1.0 ],
                     [ -w**2, -2.0*d*w ] ], dtype=float )
+    # check eignvalues
+    eigen_val, eigen_vect = np.linalg.eig( A )
+    print(eigen_val)
     # timeline
-    dt = 0.001
+    dt = 0.01
     t = np.arange(0.0, 10.0+dt, dt, dtype=float)
     # solution
     sol_f = np.zeros([2, t.size], dtype=float)
@@ -391,21 +395,146 @@ if True:
         if index == 0:
             # initial condition
             sol_f[:,0] = [2.0, 0.0]
+            sol_b[:,0] = [2.0, 0.0]
         else:
             # time evolution
-            sol_f[:,index] = (np.eye(2) + dt * A) @ sol_f[:,index-1] 
+            sol_f[:,index] = (np.eye(2) + dt * A) @ sol_f[:,index-1]
+            sol_b[:,index] = np.linalg.inv( (np.eye(2) - dt * A) ) @ sol_b[:,index-1]
     # visualization
-    fig, ax = plt.subplots(1, 2, figsize=(5,4))
-    ax[0].plot(t, sol_f[0,:], label='x(t)')
-    ax[0].plot(t, sol_f[1,:], label='v(t)')
-    ax[1].plot(sol_f[0,:], sol_f[1,:], label='phase plot')
+    fig, ax = plt.subplots(1, 3, figsize=(13,4))
+    ax[0].plot(t, sol_f[0,:], label='x(t) fw')
+    ax[0].plot(t, sol_b[0,:], label='x(t) bw')
+    ax[1].plot(t, sol_f[1,:], label='v(t) fw')
+    ax[1].plot(t, sol_b[1,:], label='v(t) bw')
+    ax[2].plot(sol_f[0,:], sol_f[1,:], label='phase fw')
+    ax[2].plot(sol_b[0,:], sol_b[1,:], label='phase bw')
     ax[0].grid(ls=':')
     ax[1].grid(ls=':')
+    ax[2].grid(ls=':')
     ax[0].legend(fontsize=9)
     ax[1].legend(fontsize=9)
+    ax[2].legend(fontsize=9)
     plt.tight_layout()
     plt.show()
     plt.close()
+
+
+#
+# ME564 Lec - 25
+#
+
+if False:
+    # hypocycloid
+    a = 1.0
+    theta = np.linspace(0.0, 2.0*np.pi, 361)
+    x = a * np.cos(theta)**3
+    y = a * np.sin(theta)**3
+    # visualization
+    fig, ax = plt.subplots(1, 1, figsize=(5,4))
+    ax.plot(x, y, 'b.:', linewidth=2.0, label='hypocycloid')
+    ax.grid(':')
+    ax.legend(fontsize=9)
+    plt.tight_layout()
+    plt.show()
+    plt.close()
+
+
+#
+# ME564 Lec - 28
+#
+
+if True:
+    # double gyre flow
+    # model parameters
+    A, eps, om = 0.1, 0.25, 2.0*np.pi/10.0
+    # spatial
+    xrange = np.arange(0.0, 2.0, 0.025)
+    yrange = np.arange(0.0, 1.0, 0.025)
+    X, Y = np.meshgrid(xrange, yrange)    
+    # temporal
+    trange = np.arange(0.0, 15.0, 0.005)
+    # solution
+    sol = np.zeros([trange.size, 2, xrange.size, yrange.size], dtype=float)
+    sol_vel = np.zeros([trange.size, 2, xrange.size, yrange.size], dtype=float)
+    # time evolution
+    for index in range(trange.size):
+        # modeling parameters at t
+        a = eps * np.sin( om * trange[index] )
+        b = 1.0 - 2.0 * a
+        # check time
+        if index == 0:
+            # modeling equation
+            f = a * X.T**2 + b * X.T
+            df = 2.0 * a * X.T + b
+            # stream function at t = psi = np.sin(np.pi*f*X.T)*np.sin(np.pi*Y.T)
+            # vector field at t
+            u = -np.pi * A * np.sin(np.pi*f) * np.cos(np.pi*Y.T)          #  d psi / d Y
+            v =  np.pi * A * np.cos(np.pi*f) * np.sin(np.pi*Y.T) * df     # -d psi / d X
+            # initial conditions
+            sol[index,0,:,:] = X.T
+            sol[index,1,:,:] = Y.T
+            sol_vel[index,0,:,:] = u
+            sol_vel[index,1,:,:] = v
+        else:
+            # dt
+            dt = trange[index] - trange[index-1]
+            # modeling equation
+            f = a * sol[index-1,0,:,:]**2 + b * sol[index-1,0,:,:]
+            df = 2.0 * a * sol[index-1,0,:,:] + b
+            # stream function at t = psi = np.sin(np.pi*f*sol[index-1,0,:,:])*np.sin(np.pi*sol[index-1,1,:,:])
+            # vector field at t
+            u = -np.pi * np.sin(np.pi*f) * np.cos(np.pi*sol[index-1,1,:,:])          #  d psi / d Y
+            v =  np.pi * np.cos(np.pi*f) * np.sin(np.pi*sol[index-1,1,:,:]) * df     # -d psi / d X
+            # after dt
+            sol[index,0,:,:] = sol[index-1,0,:,:] + u * dt
+            sol[index,1,:,:] = sol[index-1,1,:,:] + v * dt
+            sol_vel[index,0,:,:] = u
+            sol_vel[index,1,:,:] = v
+    # visualization
+    images = []
+    for t_index in range(0,trange.size,10):
+        fig, ax = plt.subplots(2, 2, figsize=(8,4))             # subplot_kw={'projection':'3d'}
+        ax[0,0].quiver(sol[0,0,::4,::4], sol[0,1,::4,::4], sol_vel[0,0,::4,::4], sol_vel[0,1,::4,::4], units='xy',
+                       scale=3.0, zorder=3, color='blue', width=0.007, headwidth=5.0, headlength=5.0)
+        ax[0,0].set_xlabel('x')
+        ax[0,0].set_ylabel('y')
+        ax[0,0].set_title('u, v at t_index 0')
+        ax[0,0].grid(ls=':')
+        ax[0,1].quiver(sol[t_index,0,::4,::4], sol[t_index,1,::4,::4], sol_vel[t_index,0,::4,::4], sol_vel[t_index,1,::4,::4], units='xy',
+                       scale=20.0, zorder=3, color='blue', width=0.007, headwidth=5.0, headlength=5.0)
+        ax[0,1].set_xlabel('x')
+        ax[0,1].set_ylabel('y')
+        ax[0,1].set_title('u, v at t_index %i' % t_index)
+        ax[0,1].grid(ls=':')
+        ax[1,0].plot( sol[0,0,:,:].flatten(), sol[0,1,:,:].flatten(), 'r.', markersize=1.0)
+        ax[1,0].set_xlabel('x')
+        ax[1,0].set_ylabel('y')
+        ax[1,0].set_title('particles at t_index 0')
+        ax[1,0].grid(ls=':')
+        ax[1,1].plot( sol[t_index,0,:,:].flatten(), sol[t_index,1,:,:].flatten(), 'r.', markersize=1.0)
+        ax[1,1].set_xlabel('x')
+        ax[1,1].set_ylabel('y')
+        ax[1,1].set_title('particles at t_index %i' % t_index)
+        ax[1,1].grid(ls=':')
+        plt.tight_layout()
+        output_filename = 'particle_trajectory_%i.png' % t_index
+        plt.savefig(output_filename)
+        plt.close()
+        print(output_filename)
+        #
+        if t_index != 0:
+            images.append( PIL.Image.open(output_filename) )
+    #
+    im = PIL.Image.open('particle_trajectory_0.png')
+    #
+    im.save('particle_trajectory_animation.gif', save_all=True, append_images=images, duration=200, loop=0)
+    
+
+
+
+
+
+
 
 
 
