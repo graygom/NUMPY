@@ -462,15 +462,19 @@ if False:
     ax1.plot(trange, sol[:,2], 'b.:', label='Z coordinate')
     ax1.set_xlabel('time')
     ax1.set_ylabel('coordinate')
+    ax1.set_title('Lorentz eq. w/ RK4 integ.')
     ax1.grid(ls=':')
     ax1.legend(fontsize=8)
     ax2 = fig.add_subplot(1, 2, 2, projection='3d')
-    ax2.plot(sol[:,0], sol[:,1], sol[:,2])
+    ax2.plot(sol[:,0], sol[:,1], sol[:,2], label='init pos = (-8,8,27)')
     ax2.set_xlabel('X')
     ax2.set_ylabel('Y')
     ax2.set_zlabel('Z')
+    ax2.set_title('Lorentz eq. w/ RK4 integ.')
     ax2.grid(ls=':')
+    ax1.legend(fontsize=8)
     plt.tight_layout()
+    plt.savefig('lorentz_eq_using_RK4.png')
     plt.show()
     plt.close()
     
@@ -487,10 +491,14 @@ if False:
     y = a * np.sin(theta)**3
     # visualization
     fig, ax = plt.subplots(1, 1, figsize=(5,4))
-    ax.plot(x, y, 'b.:', linewidth=2.0, label='hypocycloid')
+    ax.plot(x, y, 'b.:', linewidth=2.0, label='$x^{2/3}$+$y^{2/3}$=$a^{2/3}$')
     ax.grid(':')
     ax.legend(fontsize=9)
+    ax.set_xlabel('x')
+    ax.set_ylabel('y')
+    ax.set_title('hypocycloid')
     plt.tight_layout()
+    plt.savefig('hypocycloid.png')
     plt.show()
     plt.close()
 
@@ -584,6 +592,9 @@ if False:
     im = PIL.Image.open('particle_trajectory_0.png')
     im.save('particle_trajectory_animation.gif', save_all=True, append_images=images, duration=200, loop=0)
     
+
+
+
 
 
 
