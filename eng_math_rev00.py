@@ -420,11 +420,67 @@ if False:
 
 
 #
+# ME564 Lec - 18, 19, 20
+#
+
+if False:
+    # solving Lorentz equation w/ Runge-Kutta 4th order (aka ode45 in matlab)
+    # Lorentz equation
+    def lorentz_eq(x, sigma, beta, rho):
+        dx_dt = np.zeros(3, dtype=float)
+        dx_dt[0] = sigma * (x[1] - x[0])            # Vx
+        dx_dt[1] = x[0] * ( rho - x[2] ) - x[1]     # Vy
+        dx_dt[2] = x[0] * x[1] - beta * x[2]        # Vz
+        return dx_dt
+    # model parameters
+    sigma, beta, rho = 10.0, 8.0/3.0, 28.0
+    # timeline
+    trange = np.arange(0.0, 10.0, 0.01)
+    # solution
+    sol = np.zeros([trange.size,3], dtype=float)
+    # time evolution
+    for index in range(trange.size):
+        #
+        if index == 0:
+            # initial conditions
+            sol[index,:] = np.array([-8.0, 8.0, 27.0])
+        else:
+            # dt
+            dt = trange[index] - trange[index-1]
+            # Runge-Kutta 4th order 1
+            f1 = lorentz_eq(sol[index-1,:], sigma, beta, rho)
+            f2 = lorentz_eq(sol[index-1,:]+dt/2*f1, sigma, beta, rho)
+            f3 = lorentz_eq(sol[index-1,:]+dt/2*f2, sigma, beta, rho)
+            f4 = lorentz_eq(sol[index-1,:]+dt*f3, sigma, beta, rho)
+            # Runge-Kutta 4th order 2
+            sol[index,:] = sol[index-1,:] + dt / 6.0 * (f1 + 2.0*f2 + 2.0*f3 + f4)
+    # visualization
+    fig = plt.figure(figsize=(12,5))
+    ax1 = fig.add_subplot(1, 2, 1)
+    ax1.plot(trange, sol[:,0], 'r.:', label='X coordinate')
+    ax1.plot(trange, sol[:,1], 'g.:', label='Y coordinate')
+    ax1.plot(trange, sol[:,2], 'b.:', label='Z coordinate')
+    ax1.set_xlabel('time')
+    ax1.set_ylabel('coordinate')
+    ax1.grid(ls=':')
+    ax1.legend(fontsize=8)
+    ax2 = fig.add_subplot(1, 2, 2, projection='3d')
+    ax2.plot(sol[:,0], sol[:,1], sol[:,2])
+    ax2.set_xlabel('X')
+    ax2.set_ylabel('Y')
+    ax2.set_zlabel('Z')
+    ax2.grid(ls=':')
+    plt.tight_layout()
+    plt.show()
+    plt.close()
+    
+
+#
 # ME564 Lec - 25
 #
 
 if False:
-    # hypocycloid
+    # hypocycloid: x**(2/3) + y**(2/3) = a**(2/3)
     a = 1.0
     theta = np.linspace(0.0, 2.0*np.pi, 361)
     x = a * np.cos(theta)**3
@@ -443,7 +499,7 @@ if False:
 # ME564 Lec - 28
 #
 
-if True:
+if False:
     # double gyre flow
     # model parameters
     A, eps, om = 0.1, 0.25, 2.0*np.pi/10.0
@@ -521,14 +577,17 @@ if True:
         plt.savefig(output_filename)
         plt.close()
         print(output_filename)
-        #
+        # making animation in gif 1
         if t_index != 0:
             images.append( PIL.Image.open(output_filename) )
-    #
+    # making animation in gif 2
     im = PIL.Image.open('particle_trajectory_0.png')
-    #
     im.save('particle_trajectory_animation.gif', save_all=True, append_images=images, duration=200, loop=0)
     
+
+
+
+
 
 
 
