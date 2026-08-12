@@ -3,7 +3,8 @@
 # AUTHOR: Hyunseung Yoo
 # PURPOSE:
 # REVISION:
-# REFERENCE: engineering mathematics (UW ME564/565), 2014, Steve Brunton
+# REFERENCE: engineering mathematics (UW ME564), 2014, Steve Brunton
+#            engineering mathematics (UW ME565), 2015, Steve Brunton
 #
 
 
@@ -507,7 +508,7 @@ if False:
 # ME564 Lec - 28
 #
 
-if False:
+if True:
     # double gyre flow
     # model parameters
     A, eps, om = 0.1, 0.25, 2.0*np.pi/10.0
@@ -556,15 +557,18 @@ if False:
             sol_vel[index,1,:,:] = v
     # visualization
     images = []
+    step = 1
     for t_index in range(0,trange.size,10):
         fig, ax = plt.subplots(2, 2, figsize=(8,4))             # subplot_kw={'projection':'3d'}
-        ax[0,0].quiver(sol[0,0,::4,::4], sol[0,1,::4,::4], sol_vel[0,0,::4,::4], sol_vel[0,1,::4,::4], units='xy',
+        ax[0,0].quiver(sol[0,0,::step,::step], sol[0,1,::step,::step],
+                       sol_vel[0,0,::step,::step], sol_vel[0,1,::step,::step], units='xy',
                        scale=3.0, zorder=3, color='blue', width=0.007, headwidth=5.0, headlength=5.0)
         ax[0,0].set_xlabel('x')
         ax[0,0].set_ylabel('y')
         ax[0,0].set_title('u, v at t_index 0')
         ax[0,0].grid(ls=':')
-        ax[0,1].quiver(sol[t_index,0,::4,::4], sol[t_index,1,::4,::4], sol_vel[t_index,0,::4,::4], sol_vel[t_index,1,::4,::4], units='xy',
+        ax[0,1].quiver(sol[t_index,0,::step,::step], sol[t_index,1,::step,::step],
+                       sol_vel[t_index,0,::step,::step], sol_vel[t_index,1,::step,::step], units='xy',
                        scale=20.0, zorder=3, color='blue', width=0.007, headwidth=5.0, headlength=5.0)
         ax[0,1].set_xlabel('x')
         ax[0,1].set_ylabel('y')
