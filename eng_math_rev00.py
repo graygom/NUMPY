@@ -508,7 +508,7 @@ if False:
 # ME564 Lec - 28
 #
 
-if True:
+if False:
     # double gyre flow
     # model parameters
     A, eps, om = 0.1, 0.25, 2.0*np.pi/10.0
@@ -595,7 +595,32 @@ if True:
     # making animation in gif 2
     im = PIL.Image.open('particle_trajectory_0.png')
     im.save('particle_trajectory_animation.gif', save_all=True, append_images=images, duration=200, loop=0)
-    
+
+
+#
+# ME565 Lec - 05
+#
+
+if True:
+    # Cauchy integral formula (CIF)
+    N = 1000
+    R = 1.0
+    theta = np.linspace( complex(0, 0), complex(0, 2.0*np.pi), N)
+    dtheta = 2.0*np.pi / N
+    z = R * np.exp(theta)[:-1]
+    dz = complex(0, 1) * z * dtheta     # dL
+    f1 = np.cos(z)
+    f2 = np.sin(z)
+    f3 = np.exp(z) / z
+    integ1 = (f1 * dz).sum()            # integ f1(z) dL
+    integ2 = (f2 * dz).sum()            # integ f2(z) dL
+    integ3 = (f3 * dz).sum()            # integ f3(z) dL
+    print('f1 CIF = Re=%.2e, Im=%.2e' % (integ1.real, integ1.imag))
+    print('f2 CIF = Re=%.2e, Im=%.2e' % (integ2.real, integ2.imag))
+    print('f3 CIF = Re=%.2e, Im=%.2e' % (integ3.real, integ3.imag))
+        
+
+
 
 
 
