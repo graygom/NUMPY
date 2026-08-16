@@ -8,6 +8,7 @@
 #
 
 
+import time
 import numpy as np
 import scipy as sc
 import sympy as sy
@@ -598,10 +599,10 @@ if False:
 
 
 #
-# ME565 Lec - 05
+# ME565 Lec - 04
 #
 
-if True:
+if False:
     # Cauchy integral formula (CIF)
     N = 1000
     R = 1.0
@@ -618,7 +619,94 @@ if True:
     print('f1 CIF = Re=%.2e, Im=%.2e' % (integ1.real, integ1.imag))
     print('f2 CIF = Re=%.2e, Im=%.2e' % (integ2.real, integ2.imag))
     print('f3 CIF = Re=%.2e, Im=%.2e' % (integ3.real, integ3.imag))
-        
+
+
+#
+# ME565 Lec - 11
+#
+
+if False:
+    # numerical solution of laplace equation (on retangular grid)
+    L, H = 100, 100
+    u  = np.zeros([L, H], dtype=float)
+    Lu = np.zeros([L, H], dtype=float)
+    Au = np.zeros([L, H], dtype=float)
+    
+    # boundary conditions 1
+    u[ 0, :] = 0.0
+    u[-1, :] = 0.0
+    u[ :, 0] = 1.0
+    u[ :,-1] = 1.0
+    
+    # boundary conditions 2
+    u[ 0, :] = 0.0
+    u[-1, :] = 0.0
+    u[ :, 0] = 0.0
+    u[ :,-1] = np.sin( np.arange(L, dtype=float) / L * 2.0 * np.pi )
+
+    #
+    Au = u.copy()
+    
+    # method 1
+    dt = 0.1
+    loops = 1000
+    # CPU time
+    start_t = time.time()
+    for itera in range(loops):
+        # laplacian (5 points stencil)
+        for index_x in range(1, L-1):
+            for index_y in range(1, H-1):
+                Lu[index_x, index_y] = ( -4.0 * u[index_x, index_y] +
+                                         u[index_x+1, index_y] + u[index_x-1, index_y] +
+                                         u[index_x, index_y+1] + u[index_x, index_y-1] )
+        # time evolution (forward Euler)
+        u += Lu * dt
+    # CPU time
+    end_t = time.time()
+    print('method 1 > CPU time = %.4fsec' % (end_t - start_t))
+    
+    # method 2
+    dt = 0.1
+    loops = 1000
+    # CPU time
+    start_t = time.time()
+    for itera in range(loops):
+        # laplacian (5 points stencil)
+        for index_x in range(1, L-1):
+            for index_y in range(1, H-1):
+                Au[index_x, index_y] = (Au[index_x-1, index_y] + Au[index_x+1, index_y] +
+                                        Au[index_x, index_y-1] + Au[index_x, index_y+1]) / 4.0
+    # CPU time
+    end_t = time.time()
+    print('method 2 > CPU time = %.4fsec' % (end_t - start_t))
+    
+    # visualization
+    fig, ax = plt.subplots(1, 2, figsize=(9,4))
+    ax[0].imshow(u)
+    ax[1].imshow(Au)
+    plt.tight_layout()
+    plt.show()
+    plt.close()
+
+if False:
+    # finding coefficient 
+    L, H = 100.0, 100.0
+    xrange, yrange = np.arange(L), np.arange(H)
+    X, Y = np.meshgrid(xrange, yrange)
+    # boundary conditions
+    bc = np.sin(2.0*np.pi*yrange/H)
+    # calation of coefficient
+    a2 = 2.0 / (H * np.sinh(2.0*np.pi*L/H) ) * (np.sin(2.0*np.pi/H*yrange)**2).sum()
+    print('A2 = %.3e' % a2)
+    # analytic solution
+    u = a2 * np.sin(2.0*np.pi/H*Y) * np.sinh(2.0*np.pi/H*X)
+    # visualization
+    fig, ax = plt.subplots(1, 1, figsize=(5,5))
+    ax.imshow(u)
+    plt.tight_layout()
+    plt.show()
+    plt.close()
+
 
 
 
