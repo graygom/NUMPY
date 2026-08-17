@@ -708,6 +708,84 @@ if False:
     plt.close()
 
 
+#
+# ME565 Lec - 12
+#
+
+if False:
+    # Fourier series
+    dx = 0.005
+    L = 1.0
+    fs_order = 100
+    x = np.arange(dx, L+dx, dx, dtype=float)
+    f = np.ones(x.shape, dtype=float)
+    f[:int(f.shape[0]/2)] = 0.0
+    # finding coefficients
+    f_fs, An, Bn = [], [], []
+    A0 = 2.0 / L * ( f * np.cos( 2.0 * np.pi * 0 * x / L ) ).sum() * dx
+    f_fs.append( A0/2.0 * np.ones( x.shape, dtype=float ) )
+    for index_n in range(1, fs_order):
+        An.append( 2.0 / L * ( f * np.cos( 2.0 * np.pi * index_n * x / L ) ).sum() * dx )
+        Bn.append( 2.0 / L * ( f * np.sin( 2.0 * np.pi * index_n * x / L ) ).sum() * dx )
+        f_fs.append( An[-1] * np.cos( 2.0 * np.pi * index_n * x / L ) +
+                     Bn[-1] * np.sin( 2.0 * np.pi * index_n * x / L ) )
+    f_fs = np.vstack( f_fs ).sum( axis=0 )
+    # debugging
+    print(x.shape, f.shape, f_fs.shape)
+    # visualization
+    fig, ax = plt.subplots(1, 1, figsize=(5,5))
+    ax.plot(x, f, label='f(x)')
+    ax.plot(x, f_fs, label='f_fs(x) order=%i' % fs_order)
+    ax.grid(ls=':')
+    ax.legend(fontsize=10)
+    ax.set_xlim(-0.5, 1.5)
+    ax.set_ylim(-0.5, 1.5)
+    ax.set_aspect(1.0)
+    plt.tight_layout()
+    plt.show()
+    plt.close()
+
+
+#
+# ME565 Lec - 16
+#
+
+if True:
+    # fast Fourier transform
+    N = 500
+    x = np.ones(N, dtype=float)
+    y = np.fft.fft(x)
+    # discrete Fourier transform > vandermonde matrix (slow)
+    start_t = time.time()
+    w = np.exp( complex(0.0, -2.0 * np.pi / N) )
+    DFT1 = np.zeros([N, N], dtype=float)
+    for index_x in range(N):
+        for index_y in range(N):
+            DFT1[index_x, index_y] = w**(index_x * index_y)
+    end_t = time.time()
+    print('DFT matrix 1 CPU time = %.3esec' % (end_t-start_t))
+    print(DFT1.shape)
+    # discrete Fourier transform > vandermonde matrix (fast)
+    start_t = time.time()
+    w = np.exp( complex(0.0, -2.0 * np.pi / N) )
+    xrange, yrange = np.arange(N, dtype=float), np.arange(N, dtype=float)
+    X, Y = np.meshgrid(xrange, yrange)
+    DFT2 = w**(X.T * Y.T)
+    end_t = time.time()
+    print('DFT matrix 2 CPU time = %.3esec' % (end_t-start_t))
+    print(DFT2.shape)
+    # visualization
+    fig, ax = plt.subplots(1, 2, figsize=(9,5))
+    ax[0].imshow(DFT1.real)
+    ax[0].set_aspect(1.0)
+    ax[1].imshow(DFT2.real)
+    ax[1].set_aspect(1.0)
+    plt.tight_layout()
+    plt.show()
+    plt.close()
+    
+    
+
 
 
 
