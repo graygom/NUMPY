@@ -750,7 +750,26 @@ if False:
 # ME565 Lec - 16
 #
 
-if True:
+if False:
+    # data
+    dt = 0.001
+    t = np.arange(0.0, 1.0+dt, dt, dtype=float)
+    x = np.sin(2.0*np.pi*50.0*t) + np.sin(2.0*np.pi*120.0*t)
+    # fast Fourier transform
+    N = t.shape[0]
+    Y = np.fft.fft(x, N)                # FFT
+    PSD = Y * Y.conj() / N              # power spectrum density
+    freq = 1/(dt*N) * np.arange(N)      # frequency
+    L = np.where( freq < freq[-1]/2.0 ) # half
+    # visualization
+    fig, ax = plt.subplots(1, 2, figsize=(9,5))
+    ax[0].plot(t, x)
+    ax[1].plot(freq[L], PSD[L])
+    plt.tight_layout()
+    plt.show()
+    plt.close()
+    
+if False:
     # fast Fourier transform
     N = 500
     x = np.ones(N, dtype=float)
@@ -785,11 +804,6 @@ if True:
     plt.close()
     
     
-
-
-
-
-
 
 
 
