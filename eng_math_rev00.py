@@ -14,6 +14,7 @@ import scipy as sc
 import sympy as sy
 import matplotlib.pyplot as plt
 import PIL
+import soundfile as sf
 
 
 #
@@ -755,7 +756,7 @@ if False:
     dt = 0.001
     t = np.arange(0.0, 1.0+dt, dt, dtype=float)
     x = np.sin(2.0*np.pi*50.0*t) + np.sin(2.0*np.pi*120.0*t)
-    # fast Fourier transform
+    # transform
     N = t.shape[0]
     Y = np.fft.fft(x, N)                # FFT
     PSD = Y * Y.conj() / N              # power spectrum density
@@ -802,9 +803,55 @@ if False:
     plt.tight_layout()
     plt.show()
     plt.close()
-    
-    
 
+
+#
+# ME565 Lec - 17
+#
+
+if False:
+    # data
+    dt = 0.001
+    t = np.arange(0.0, 1.0+dt, dt, dtype=float)
+    x = np.sin(2.0*np.pi*50.0*t) + np.sin(2.0*np.pi*120.0*t)
+    rng = np.random.default_rng(seed=0)
+    noise = rng.normal(loc=0.0, scale=2.5, size=x.shape[0])
+    x2 = x + noise
+    # transform
+    N = t.shape[0]
+    Y = np.fft.fft(x, N)                # FFT
+    Y2 = np.fft.fft(x2, N)              # FFT
+    PSD = Y * Y.conj() / N              # power spectrum density
+    PSD2 = Y2 * Y2.conj() / N           # power spectrum density
+    freq = 1/(dt*N) * np.arange(N)      # frequency
+    L = np.where( freq < freq[-1]/2.0 ) # half
+    # filtering
+    filtering = PSD2 > 50.0             # power spectrum density filtering
+    PSD3 = PSD2 * filtering             # power spectrum density
+    x3 = np.fft.ifft(Y2 * filtering)    # inverse FFT 
+    # visualization
+    fig, ax = plt.subplots(2, 1, figsize=(13,4))
+    ax[0].plot(t, x, 'b', label='clean')
+    ax[0].plot(t, x2, 'r', label='w/ noise')
+    ax[0].plot(t, x3, 'g', label='w/ noise filtering')
+    ax[0].grid(ls=':')
+    ax[0].legend(fontsize=8)
+    ax[1].plot(freq[L], PSD[L], 'b', label='clean')
+    ax[1].plot(freq[L], PSD2[L], 'r', label='w/ noise')
+    ax[1].plot(freq[L], PSD3[L], 'g', label='w/ noise filtering')
+    ax[1].grid(ls=':')
+    ax[1].legend(fontsize=8)
+    plt.tight_layout()
+    plt.savefig('fft_filtering_ifft.png')
+    plt.show()
+    plt.close()
+
+if False:
+    filename = 'Mushishi no Theme.mp3'
+    y, fs = sf.read(filename, sr=None)
+    # scipy.signal.spectrogram
+    
+    
 
 
 
