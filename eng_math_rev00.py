@@ -856,7 +856,7 @@ if False:
 # ME565 Lec - 18
 #
 
-if False:
+if True:
     # image
     img = PIL.Image.open('axial_mri.jpg').convert('L')  # gray image
     wid, hei = img.size         # width, height
@@ -867,42 +867,46 @@ if False:
     # finding FFT2
     start_t = time.time()                                                   # CPU time
     img_np_fft2 = np.fft.fft2(img_np)                                       # 2D FFT
-    img_np_fft2_f = np.log10( np.abs( np.fft.fftshift(img_np_fft2) + 1 ) )  # frequency
-    f_min, f_max = np.min(img_np_fft2_f), np.max(img_np_fft2_f)             # f_min, f_max
-    img_np_fft2_f = (img_np_fft2_f - f_min) / (f_max - f_min)               # frequency normalized
+    img_np_fft2_c = np.fft.fftshift(img_np_fft2)                            # 2D FFT centered
+    img_np_fft2_c = np.log( np.abs( img_np_fft2_c ) + 1.0 )                 # 2D FFT centered
+    f_min, f_max = np.min(img_np_fft2_c), np.max(img_np_fft2_c)             # f_min, f_max
+    img_np_fft2_c = (img_np_fft2_c - f_min) / (f_max - f_min)               # 2D FFT centered normalized
     end_t = time.time()                                                     # CPU time
-    print('FFT2 FREQ CPU time = %.3esec' % (end_t - start_t))               # CPU time
+    print('FFT2 CPU time = %.3esec' % (end_t - start_t))                    # CPU time
     # filtering FFT2
-    f_cut, f_keep = 0.33, 40
+    f_cut = 40
     start_t = time.time()                                                   # CPU time
-    img_np_fft2_filter = img_np_fft2.copy()                                 # copy
-    img_np_fft2_f_indices = np.where( img_np_fft2_f < f_cut )
-    #img_np_fft2_filter[ img_np_fft2_f_indices ] = 0.0                       # 2D FFT filtering
-    img_np_fft2_filter[ f_keep:-f_keep,f_keep:-f_keep ] = 0.0               # 2D FFT filtering
+    img_np_fft2_lf = img_np_fft2.copy()                                     # copy
+    img_np_fft2_lf[f_cut:-f_cut, f_cut:-f_cut] = 0.0                        # 2D FFT LF
+    img_np_fft2_lf_c = np.fft.fftshift(img_np_fft2_lf)                      # 2D FFT LF centered
+    img_np_fft2_lf_c = np.log( np.abs( img_np_fft2_lf_c ) + 1.0 )           # 2D FFT LF centered
+    f_min, f_max = np.min(img_np_fft2_lf_c), np.max(img_np_fft2_lf_c)       # f_min, f_max
+    img_np_fft2_lf_c = (img_np_fft2_lf_c - f_min) / (f_max - f_min)         # 2D FFT LF centered normalized
     end_t = time.time()                                                     # CPU time
-    print('FILTERING CPU time = %.3esec' % (end_t - start_t))               # CPU time
+    print('FFT2 LF CPU time = %.3esec' % (end_t - start_t))                 # CPU time
     # finding inverse filtered FFT2
     start_t = time.time()                                                   # CPU time
-    img_np_fft2_filter_ifft = np.fft.ifft2(img_np_fft2_filter)              # inverse 2D FFT
-    img_np_fft2_filter_ifft = np.abs(img_np_fft2_filter_ifft)          
+    img_np_fft2_lf_ifft = np.fft.ifft2(img_np_fft2_lf)                      # inverse 2D FFT LF
+    img_np_fft2_lf_ifft = np.abs( img_np_fft2_lf_ifft )                     # inverse 2D FFT LF
     end_t = time.time()                                                     # CPU time
-    print('iFFT2 REAL CPU time = %.3esec' % (end_t - start_t))               # CPU time
+    print('iFFT2 REAL CPU time = %.3esec' % (end_t - start_t))              # CPU time
     # visualization
     fig, ax = plt.subplots(2, 2, figsize=(9,9))
-    ax[0,0].set_title('Spatial image @original')
     ax[0,0].imshow(img_np)
-    ax[0,1].set_title('Freq spectrum @original')
-    ax[0,1].imshow(img_np_fft2_f)
-    ax[1,0].set_title('Spatial image @filtering')
-    ax[1,0].imshow(img_np_fft2_filter_ifft)
-    #ax[1,1].imshow(np.where(img_np_fft2_f < f_cut, 0.0, img_np_fft2_f))
-    img_np_fft2_f[ f_keep:-f_keep,f_keep:-f_keep ] = 0.0
-    ax[1,1].imshow(img_np_fft2_f)
-    ax[1,1].set_title('Freq spectrum @filtering')
+    ax[0,0].set_title('Spatial image @original')
+    ax[0,1].imshow(img_np_fft2_c)
+    ax[0,1].set_title('centered Freq spectrum @original')
+    ax[1,0].imshow(img_np_fft2_lf_ifft)
+    ax[1,0].set_title('Spatial image @LF')
+    ax[1,1].imshow(img_np_fft2_lf_c)
+    ax[1,1].set_title('centered Freq spectrum @LF')
     plt.savefig('axial_mri_fft_2_filtering_ifft.png')
     plt.tight_layout()
     plt.show()
     plt.close()
+
+
+
 
 
 
