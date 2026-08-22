@@ -14,7 +14,7 @@ import scipy as sc
 import sympy as sy
 import matplotlib.pyplot as plt
 import PIL
-import soundfile as sf
+#import soundfile as sf
 
 
 #
@@ -848,10 +848,63 @@ if False:
 
 if False:
     filename = 'Mushishi no Theme.mp3'
-    y, fs = sf.read(filename, sr=None)
+    #y, fs = sf.read(filename, sr=None)
     # scipy.signal.spectrogram
-    
-    
+
+
+#
+# ME565 Lec - 18
+#
+
+if False:
+    # image
+    img = PIL.Image.open('axial_mri.jpg').convert('L')  # gray image
+    wid, hei = img.size         # width, height
+    img_np = np.array(img)      # numpy
+    rows, cols = img_np.shape   # rows, columns
+    output_format = 'width/height=%i/%i > rows/cols=%i/%i'
+    print(output_format % (wid, hei, rows, cols))
+    # finding FFT2
+    start_t = time.time()                                                   # CPU time
+    img_np_fft2 = np.fft.fft2(img_np)                                       # 2D FFT
+    img_np_fft2_f = np.log10( np.abs( np.fft.fftshift(img_np_fft2) + 1 ) )  # frequency
+    f_min, f_max = np.min(img_np_fft2_f), np.max(img_np_fft2_f)             # f_min, f_max
+    img_np_fft2_f = (img_np_fft2_f - f_min) / (f_max - f_min)               # frequency normalized
+    end_t = time.time()                                                     # CPU time
+    print('FFT2 FREQ CPU time = %.3esec' % (end_t - start_t))               # CPU time
+    # filtering FFT2
+    f_cut, f_keep = 0.33, 40
+    start_t = time.time()                                                   # CPU time
+    img_np_fft2_filter = img_np_fft2.copy()                                 # copy
+    img_np_fft2_f_indices = np.where( img_np_fft2_f < f_cut )
+    #img_np_fft2_filter[ img_np_fft2_f_indices ] = 0.0                       # 2D FFT filtering
+    img_np_fft2_filter[ f_keep:-f_keep,f_keep:-f_keep ] = 0.0               # 2D FFT filtering
+    end_t = time.time()                                                     # CPU time
+    print('FILTERING CPU time = %.3esec' % (end_t - start_t))               # CPU time
+    # finding inverse filtered FFT2
+    start_t = time.time()                                                   # CPU time
+    img_np_fft2_filter_ifft = np.fft.ifft2(img_np_fft2_filter)              # inverse 2D FFT
+    img_np_fft2_filter_ifft = np.abs(img_np_fft2_filter_ifft)          
+    end_t = time.time()                                                     # CPU time
+    print('iFFT2 REAL CPU time = %.3esec' % (end_t - start_t))               # CPU time
+    # visualization
+    fig, ax = plt.subplots(2, 2, figsize=(9,9))
+    ax[0,0].set_title('Spatial image @original')
+    ax[0,0].imshow(img_np)
+    ax[0,1].set_title('Freq spectrum @original')
+    ax[0,1].imshow(img_np_fft2_f)
+    ax[1,0].set_title('Spatial image @filtering')
+    ax[1,0].imshow(img_np_fft2_filter_ifft)
+    #ax[1,1].imshow(np.where(img_np_fft2_f < f_cut, 0.0, img_np_fft2_f))
+    img_np_fft2_f[ f_keep:-f_keep,f_keep:-f_keep ] = 0.0
+    ax[1,1].imshow(img_np_fft2_f)
+    ax[1,1].set_title('Freq spectrum @filtering')
+    plt.savefig('axial_mri_fft_2_filtering_ifft.png')
+    plt.tight_layout()
+    plt.show()
+    plt.close()
+
+
 
 
 
