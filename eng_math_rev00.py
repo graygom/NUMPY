@@ -856,7 +856,7 @@ if False:
 # ME565 Lec - 18
 #
 
-if True:
+if False:
     # image
     img = PIL.Image.open('axial_mri.jpg').convert('L')  # gray image
     wid, hei = img.size         # width, height
@@ -900,7 +900,81 @@ if True:
     ax[1,0].set_title('Spatial image @LF')
     ax[1,1].imshow(img_np_fft2_lf_c)
     ax[1,1].set_title('centered Freq spectrum @LF')
-    plt.savefig('axial_mri_fft_2_filtering_ifft.png')
+    plt.savefig('axial_mri_fft_lf_filtering_ifft.png')
+    plt.tight_layout()
+    plt.show()
+    plt.close()
+
+
+#
+# ME565 Lec - 20
+#
+
+if False:
+    # numerical solution to PDEs using FFT 1
+    # space
+    L = 100.0       # length
+    N = 1000        # points
+    dx = L / N      # dx
+    x = np.arange(-L/2.0, L/2.0+dx, dx, dtype=float)
+    y = x.copy()
+    # initial conditions
+    f = x.copy()
+    f = np.where( (f>=-L/10) & (f<=L/10), 1.0, 0.0)
+    # 1D heat equation (convolution integral)
+    a = 5.0                                     # constant
+    dt, t_steps = 0.1, 100                      # timeline 
+    t = np.arange(dt, dt*(t_steps+1), dt)
+    u = f.copy()                                # convolution integral
+    u_array = []
+    for each_t in t:
+        for index_x, each_x in enumerate(x):
+            g  = 1.0 / ( 2.0 * a * np.sqrt( np.pi * each_t ) )
+            g *= np.exp( -( each_x - y )**2 / ( 4.0 * a**2 * each_t ) )
+            u[index_x] = np.dot(g, f) * dx      # convolution integral
+        u_array.append( u.copy() )
+    # visualization
+    fig, ax = plt.subplots(1, 1, figsize=(6,6))
+    ax.plot(x, u_array[0],  'o:', label='initial')
+    ax.plot(x, u_array[-1], 'o:', label='final')
+    ax.grid(ls=':')
+    ax.legend(fontsize=10)
+    plt.tight_layout()
+    plt.show()
+    plt.close()
+
+if False:
+    # numerical solution to PDEs using FFT 2
+    # space
+    L = 100.0       # length
+    N = 1000        # points
+    dx = L / N      # dx
+    x = np.linspace(-L/2.0, L/2.0, N, dtype=float)
+    y = x.copy()
+    # initial conditions
+    f = x.copy()
+    f = np.where( (f>=-L/10) & (f<=L/10), 1.0, 0.0)
+    f_hat = np.fft.fft(f)
+    # 1D heat equation (convolution integral)
+    a = 5.0                                     # constant
+    dt, t_steps = 0.1, 100                      # timeline 
+    t = np.arange(dt, dt*(t_steps+1), dt)
+    # cal k > case 1
+    k = 2.0*np.pi/L * np.concatenate( ( np.arange(0.0, N/2, 1), np.arange(-N/2, 0, 1) ) )
+    # cal k > case 2
+    k = 2.0*np.pi/L * np.arange(-N/2, N/2)
+    k = np.fft.fftshift(k)
+    # 
+    u_array = []
+    for each_t in t:
+        u_hat = f_hat * np.exp( -a**2 * k**2 * each_t )
+        u_array.append( np.fft.ifft(u_hat) )
+    # visualization
+    fig, ax = plt.subplots(1, 1, figsize=(6,6))
+    ax.plot(x, u_array[0],  'o:', label='initial')
+    ax.plot(x, u_array[-1], 'o:', label='final')
+    ax.grid(ls=':')
+    ax.legend(fontsize=10)
     plt.tight_layout()
     plt.show()
     plt.close()
