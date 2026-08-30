@@ -979,7 +979,36 @@ if False:
     plt.show()
     plt.close()
 
+if False:
+    # space
+    N = 101
+    L = 8.0 * np.pi
+    x = np.linspace(-L/2, L/2, N)
+    f = np.cos(x) * np.exp(-x**2/25)
+    # analytic
+    dfdx_a = -np.sin(x) * np.exp(-x**2/25) + np.cos(x) * np.exp(-x**2/25) * (-2*x/25)
+    # finite difference
+    dfdx_fd = ( f[1:] - f[:-1] ) / ( x[1:] - x[:-1] )
+    # spectral derivative (accurate)
+    fhat = np.fft.fft(f)                            # step 1
+    k = 2.0*np.pi/L * np.linspace(-N/2, N/2, N)     # step 2
+    k = np.fft.fftshift(k)
+    dfhatdk = k*1j * fhat                           # step 2
+    dfdx_fft = np.fft.ifft(dfhatdk)                 # step 3
+    # visualization
+    fig, ax = plt.subplots(1, 1, figsize=(6,6))
+    ax.plot(x, f, 'o:', label='f(x)')
+    ax.plot(x, dfdx_a, 'o:', label='df(x)/dx > analytic')
+    ax.plot(x[1:], dfdx_fd, 'o:', label='df(x)/dx > finite difference')
+    ax.plot(x, dfdx_fft, 'o:', label='df(x)/dx > FFT derivative')
+    ax.grid(ls=':')
+    ax.legend(fontsize=9)
+    plt.tight_layout()
+    plt.show()
+    plt.close()
 
+
+    
 
 
 
