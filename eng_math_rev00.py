@@ -1085,6 +1085,31 @@ if False:
     plt.show()
     plt.close()
 
+if True:
+    # Laplace transform
+    # visualization
+    fig, ax = plt.subplots(1, 1, figsize=(10,5))
+    # ODE: \ddot{x} + d*\dot{x} + k*x = u(t)
+    t = np.arange(0.1, 100.0, 0.1)
+    u = np.sin(t)
+    for d in [1.0]:
+        for k in np.arange(0.1, 2.1, 0.1):
+            #
+            tf_num, tf_den = [1.0], [1.0, d, k]
+            sys = sc.signal.TransferFunction(tf_num, tf_den)
+            y_lsim = sc.signal.lsim(sys, u, t)
+            #
+            if k == 0.1:
+                ax.plot(y_lsim[0], y_lsim[1], 'b', label='cont. time lin. sys.')
+            else:
+                ax.plot(y_lsim[0], y_lsim[1], 'b')
+    #
+    ax.grid(ls=':')
+    ax.legend(fontsize=10)
+    plt.tight_layout()
+    plt.show()
+    plt.close()
+
 
 
 
