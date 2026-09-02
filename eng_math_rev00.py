@@ -987,16 +987,16 @@ if False:
     f = np.cos(x) * np.exp(-x**2/25)
     # analytic
     dfdx_a = -np.sin(x) * np.exp(-x**2/25) + np.cos(x) * np.exp(-x**2/25) * (-2*x/25)
-    # finite difference
+    # finite difference (accurate for discontinuties)
     dfdx_fd = ( f[1:] - f[:-1] ) / ( x[1:] - x[:-1] )
-    # spectral derivative (accurate)
+    # spectral derivative (accurate for smooth variation)
     fhat = np.fft.fft(f)                            # step 1
     k = 2.0*np.pi/L * np.linspace(-N/2, N/2, N)     # step 2
     k = np.fft.fftshift(k)
     dfhatdk = k*1j * fhat                           # step 2
     dfdx_fft = np.fft.ifft(dfhatdk)                 # step 3
     # visualization
-    fig, ax = plt.subplots(1, 1, figsize=(6,6))
+    fig, ax = plt.subplots(1, 1, figsize=(6,5))
     ax.plot(x, f, 'o:', label='f(x)')
     ax.plot(x, dfdx_a, 'o:', label='df(x)/dx > analytic')
     ax.plot(x[1:], dfdx_fd, 'o:', label='df(x)/dx > finite difference')
@@ -1004,8 +1004,90 @@ if False:
     ax.grid(ls=':')
     ax.legend(fontsize=9)
     plt.tight_layout()
+    plt.savefig('FFT_derivative.png')
     plt.show()
     plt.close()
+
+
+#
+# ME565 Lec - 23
+#
+
+if False:
+    # Laplace transform
+    # ODE: \ddot{x} + d*\dot{x} + k*x = u(t)
+    d, k = 5.0, 4.0
+    x0, dx0 = 2.0, -5.0
+    tf_num, tf_den = [x0, dx0 + d*x0], [1.0, d, k]
+    tf_num, tf_den = [1.0], [1.0, d, k]
+    sys = sc.signal.TransferFunction(tf_num, tf_den)
+    t_step, y_step = sc.signal.step(sys)
+    t_impl, y_impl = sc.signal.impulse(sys)
+    # visualization
+    fig, ax = plt.subplots(1, 1, figsize=(5,5))
+    ax.plot(t_step, y_step, label='step response')
+    ax.plot(t_impl, y_impl, label='impulse response')
+    ax.grid(ls=':')
+    ax.legend(fontsize=10)
+    plt.tight_layout()
+    plt.show()
+    plt.close()
+
+if False:
+    # Laplace transform
+    # visualization
+    fig, ax = plt.subplots(1, 1, figsize=(10,5))
+    # ODE: \ddot{x} + d*\dot{x} + k*x = u(t)
+    for k in [1.0]:
+        for d in np.arange(0.1, 2.1, 0.1):
+            #
+            tf_num, tf_den = [1.0], [1.0, d, k]
+            sys = sc.signal.TransferFunction(tf_num, tf_den)
+            t_step, y_step = sc.signal.step(sys)
+            t_impl, y_impl = sc.signal.impulse(sys)
+            #
+            if d == 0.1:
+                ax.plot(t_step, y_step, 'b', label='step response')
+                ax.plot(t_impl, y_impl, 'r', label='impulse response')
+            else:
+                ax.plot(t_step, y_step, 'b')
+                ax.plot(t_impl, y_impl, 'r')
+    #
+    ax.grid(ls=':')
+    ax.legend(fontsize=10)
+    plt.tight_layout()
+    plt.show()
+    plt.close()
+
+if False:
+    # Laplace transform
+    # visualization
+    fig, ax = plt.subplots(1, 1, figsize=(10,5))
+    # ODE: \ddot{x} + d*\dot{x} + k*x = u(t)
+    for d in [1.0]:
+        for k in np.arange(0.1, 2.1, 0.1):
+            #
+            tf_num, tf_den = [1.0], [1.0, d, k]
+            sys = sc.signal.TransferFunction(tf_num, tf_den)
+            t_step, y_step = sc.signal.step(sys)
+            t_impl, y_impl = sc.signal.impulse(sys)
+            #
+            if k == 0.1:
+                ax.plot(t_step, y_step, 'b', label='step response')
+                ax.plot(t_impl, y_impl, 'r', label='impulse response')
+            else:
+                ax.plot(t_step, y_step, 'b')
+                ax.plot(t_impl, y_impl, 'r')
+    #
+    ax.grid(ls=':')
+    ax.legend(fontsize=10)
+    plt.tight_layout()
+    plt.show()
+    plt.close()
+
+
+
+
 
 
     
