@@ -1085,7 +1085,7 @@ if False:
     plt.show()
     plt.close()
 
-if True:
+if False:
     # Laplace transform
     # visualization
     fig, ax = plt.subplots(1, 1, figsize=(10,5))
@@ -1109,6 +1109,69 @@ if True:
     plt.tight_layout()
     plt.show()
     plt.close()
+
+if False:
+    # Laplace transform
+    # visualization
+    fig, ax = plt.subplots(2, 1, figsize=(10,5))
+    # ODE: \ddot{x} + d*\dot{x} + k*x = u(t)
+    for k in [1.0]:
+        for d in np.arange(0.1, 2.1, 0.1):
+            #
+            tf_num, tf_den = [1.0], [1.0, d, k]
+            sys = sc.signal.TransferFunction(tf_num, tf_den)
+            w, mag, phase = sc.signal.bode(sys)                 # bode plot
+            #
+            if d == 0.1:
+                ax[0].semilogx(w, mag, 'b', label='magnitude (d split)')
+                ax[1].semilogx(w, phase, 'r', label='phase (d split)')
+            else:
+                ax[0].semilogx(w, mag, 'b')
+                ax[1].semilogx(w, phase, 'r')
+    #
+    ax[0].grid(ls=':')
+    ax[0].legend(fontsize=10)
+    ax[0].set_ylabel('magnitude [dB]')
+    ax[0].set_title('Bode diagram')
+    ax[1].grid(ls=':')
+    ax[1].legend(fontsize=10)
+    ax[1].set_ylabel('phase [deg]')
+    ax[1].set_xlabel('frequency [rad/s]')
+    plt.tight_layout()
+    plt.show()
+    plt.close()
+
+if False:
+    # Laplace transform
+    # visualization
+    fig, ax = plt.subplots(2, 1, figsize=(10,5))
+    # ODE: \ddot{x} + d*\dot{x} + k*x = u(t)
+    for d in [1.0]:
+        for k in np.arange(0.1, 2.1, 0.1):
+            #
+            tf_num, tf_den = [1.0], [1.0, d, k]
+            sys = sc.signal.TransferFunction(tf_num, tf_den)
+            w, mag, phase = sc.signal.bode(sys)                 # bode plot
+            #
+            if k == 0.1:
+                ax[0].semilogx(w, mag, 'b', label='magnitude (k split)')
+                ax[1].semilogx(w, phase, 'r', label='phase (k split)')
+            else:
+                ax[0].semilogx(w, mag, 'b')
+                ax[1].semilogx(w, phase, 'r')
+    #
+    ax[0].grid(ls=':')
+    ax[0].legend(fontsize=10)
+    ax[0].set_ylabel('magnitude [dB]')
+    ax[0].set_title('Bode diagram')
+    ax[1].grid(ls=':')
+    ax[1].legend(fontsize=10)
+    ax[1].set_ylabel('phase [deg]')
+    ax[1].set_xlabel('frequency [rad/s]')
+    plt.tight_layout()
+    plt.show()
+    plt.close()
+
 
 
 
