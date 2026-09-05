@@ -1173,31 +1173,39 @@ if False:
     plt.close()
 
 
+#
+# ME565 Lec - 24
+#
 
-
-
-
-
-    
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-    
-
-
-
+if True:
+    # Laplace transform
+    # ODE: \ddot{x} + d*\dot{x} + k*x = u(t)
+    d, k = 5.0, 4.0
+    x0, dx0 = 2.0, -5.0
+    tf_num, tf_den = [1.0], [1.0, d, k]
+    sys = sc.signal.TransferFunction(tf_num, tf_den)
+    w, mag, phase = sc.signal.bode(sys)                 # bode plot
+    # visualization 1
+    fig, ax = plt.subplots(3, 1, figsize=(8,4))
+    ax[0].semilogx(w, mag, label='mag')
+    ax[1].semilogx(w, phase, label='phase')
+    ax[0].grid(ls=':')
+    ax[1].grid(ls=':')
+    ax[0].legend(fontsize=9)
+    ax[1].legend(fontsize=9)
+    plt.tight_layout()
+    # input & output
+    t = np.linspace(0.01, 100.0, 10000)
+    u = np.sin(t)
+    y = sc.signal.lsim(sys, u, t)
+    # visualization 2
+    ax[2].plot(t, u, label='input')
+    ax[2].plot(y[0], y[1], label='output')
+    ax[2].grid(ls=':')
+    ax[2].legend(fontsize=9)
+    plt.tight_layout()
+    plt.show()
+    plt.close()
 
 
 
