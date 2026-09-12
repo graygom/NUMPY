@@ -1177,7 +1177,7 @@ if False:
 # ME565 Lec - 24
 #
 
-if True:
+if False:
     # Laplace transform
     # ODE: \ddot{x} + d*\dot{x} + k*x = u(t)
     d, k = 5.0, 4.0
@@ -1206,6 +1206,55 @@ if True:
     plt.tight_layout()
     plt.show()
     plt.close()
+
+if False:
+    # Laplace transform
+    lambda_ = 1.0
+    tf_num, tf_den = [1.0], [1.0, lambda_]
+    sys = sc.signal.TransferFunction(tf_num, tf_den)                # transfer function
+    # input & output
+    t_div = 150
+    t = np.linspace(0.1, 15.0, t_div)                               # time
+    u_in = np.where( (t>t[-1]/3.0) & (t<t[-1]/3.0*2.0), 1.0, 0.0)   # input
+    y = sc.signal.lsim(sys, u_in, t)                                # output
+    impl_t, impl_out = sc.signal.impulse(sys, T=t)                  # impulse
+    # visualization
+    frames = []
+    dt = t[1] - t[0]
+    conv_integ = []
+    for t_index in range(1, t_div):
+        fig, ax = plt.subplots(1, 2, figsize=(8,3))
+        ax[0].plot(t[:t_index], u_in[:t_index], 'b', label='input')
+        ax[0].plot(y[0][:t_index], y[1][:t_index], 'r', label='LSIM output')
+        ax[0].plot([t[t_index], t[t_index]], [0, 1.2], 'k:')
+        ax[1].plot(impl_t+t[t_index], impl_out, 'b', label='impulse')
+        conv_integ.append( dt * np.sum( np.hstack( (impl_out[::-1][-t_index:], impl_out[::-1][:-t_index]) ) * u_in ) )
+        ax[1].plot(t[:t_index], conv_integ, 'm', label='convolution integ.')
+        ax[1].plot([t[t_index], t[t_index]], [0, 1.2], 'k:')
+        ax[0].grid(ls=':')
+        ax[0].set_ylim(0, 1.2)
+        ax[0].set_xlim(t[0], t[-1])
+        ax[0].set_xlabel('time [sec]')
+        ax[0].set_title('time index %i / %i' % (t_index, t_div))
+        ax[0].legend(fontsize=9)
+        ax[1].grid(ls=':')
+        ax[1].set_ylim(0, 1.2)
+        ax[1].set_xlim(t[0], t[-1])
+        ax[1].set_xlabel('time [sec]')
+        ax[1].set_title('time index %i / %i' % (t_index, t_div))
+        ax[1].legend(fontsize=9)
+        plt.tight_layout()
+        output_filename = 'frame_%i_%i.png' % (t_index, t_div)
+        print(output_filename)
+        plt.savefig(output_filename)
+        plt.close()
+        frames.append( PIL.Image.open(output_filename) )
+    # GIF
+    frames[0].save('laplace_transform_frames.gif', save_all=True,
+                   append_images=frames[1:], duration=100, loop=0)
+
+
+
 
 
 
