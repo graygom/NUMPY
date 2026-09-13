@@ -1254,6 +1254,122 @@ if False:
                    append_images=frames[1:], duration=100, loop=0)
 
 
+#
+# ME565 Lec - 26
+#
+
+if False:
+    # solving PDE (u_t = c * u_x ) > FFT + RK4
+    # spatial domain
+    L = 20.0
+    x = np.linspace(-L/2, L/2, 400)
+    dx = x[1] - x[0]
+    f = 1/np.cosh(x)    # boundary condtions
+    
+    # temporal domain
+    dt = 0.025
+    steps = 100
+    t = np.arange(dt, dt*(steps+0.01), dt)
+    
+    # rhs function (spatial domain)
+    def rhs(u, L):
+        # size, FFT of u
+        u_hat = np.fft.fft(u)
+        # calculating centered frequency domain
+        u_size = u.size
+        w = (2.0 * np.pi / L) * np.linspace( -u_size/2.0, u_size/2.0, u_size )
+        w = np.fft.fftshift(w)      # for fast calculation
+        # FFT of u_x
+        dudx_hat = 1j * w * u_hat
+        # iFFT
+        dudx = np.fft.ifft(dudx_hat)
+        # calculated u_x
+        output = -dudx
+        return output
+    
+    # rhs2 function (spatial domain)
+    def rhs2(u, L):
+        # size, FFT of u
+        u_hat = np.fft.fft(u)
+        # calculating centered frequency domain
+        u_size = u.size
+        w = (2.0 * np.pi / L) * np.linspace( -u_size/2.0, u_size/2.0, u_size )
+        w = np.fft.fftshift(w)      # for fast calculation
+        # FFT of u_x, u_xx
+        dudx_hat = 1j * w * u_hat
+        d2udx2_hat = -w**2 * u_hat
+        # iFFT
+        dudx = np.fft.ifft(dudx_hat)
+        d2udx2 = np.fft.ifft(d2udx2_hat)
+        # calculated -u*u_x + u_xx
+        #output = -0.63*u*dudx + 0.04*d2udx2    # convection + diffusion
+        output = -0.63*u*dudx                   # convection only
+        return output
+    
+    # time evolution
+    t_evol_real = []
+    t_evol_imag = []
+    t_evol_mag  = []
+    for each_t_index, each_t in enumerate(t):
+        # RK4 (from algorithm)
+        f1 = rhs2(f, L)
+        f2 = rhs2(f + dt/2 * f1, L)
+        f3 = rhs2(f + dt/2 * f2, L)
+        f4 = rhs2(f + dt/1 * f3, L)
+        f = f + dt/6.0 * (1.0*f1 + 2.0*f2 + 2.0*f3 + 1.0*f4)
+        # saving result
+        t_evol_real.append( np.real(f) )    # FAIL... amplitude decreasing...
+        t_evol_imag.append( np.imag(f) )    # FAIL... amplitude increasing...
+        t_evol_mag.append( np.sqrt( np.real(f)**2 + np.imag(f)**2 ) )
+    # numpy array
+    t_evol_real = np.array(t_evol_real)
+    t_evol_imag = np.array(t_evol_imag)
+    t_evol_mag  = np.array(t_evol_mag)
+    
+    # visualization
+    mosaic =[['A','B'],['A','C'],['A','D']]
+    fig, ax_dict = plt.subplot_mosaic(mosaic, figsize=(10,6))
+    # spatial profile
+    ax_dict['A'].plot(x, t_evol_real[0,:], 'b.', label='real part @init')
+    ax_dict['A'].plot(x, t_evol_real[-1,:], 'r.', label='real part @diverging')
+    ax_dict['A'].plot(x, t_evol_imag[0,:], 'b:', label='imag part @init')
+    ax_dict['A'].plot(x, t_evol_imag[-1,:], 'r:', label='imag part @diverging')
+    ax_dict['A'].plot(x, t_evol_mag[0,:], 'b', label='magnitude @init')
+    ax_dict['A'].plot(x, t_evol_mag[-1,:], 'r', label='magnitude @diverging')
+    ax_dict['A'].grid(ls=':')
+    ax_dict['A'].legend(fontsize=9)
+    ax_dict['A'].set_xlabel('position [m]')
+    ax_dict['A'].set_ylabel('amplitude')
+    ax_dict['A'].set_title('1D Burger\'s equation')
+    # real part
+    ax_b = ax_dict['B'].imshow(t_evol_real)
+    ax_dict['B'].contour(t_evol_real, colors='w', linewidths=0.5)
+    ax_dict['B'].set_xlabel('position [m]')
+    ax_dict['B'].set_ylabel('time ticks')
+    ax_dict['B'].set_title('real(amplitude)')
+    plt.colorbar(ax_b)
+    # imag part
+    ax_c = ax_dict['C'].imshow(t_evol_imag)
+    ax_dict['C'].contour(t_evol_imag, colors='w', linewidths=0.5)
+    ax_dict['C'].set_xlabel('position [m]')
+    ax_dict['C'].set_ylabel('time ticks')
+    ax_dict['C'].set_title('imag(amplitude)')
+    plt.colorbar(ax_c)
+    # magnitude
+    ax_d = ax_dict['D'].imshow(t_evol_mag)
+    ax_dict['D'].contour(t_evol_mag, colors='w', linewidths=0.5)
+    ax_dict['D'].set_xlabel('position [m]')
+    ax_dict['D'].set_ylabel('time ticks')
+    ax_dict['D'].set_title('|amplitude|')
+    plt.colorbar(ax_d)
+    #
+    plt.tight_layout()
+    plt.savefig('1d_burgers_equation.png')
+    plt.show()
+    plt.close()
+    
+
+
 
 
 
