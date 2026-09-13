@@ -1367,7 +1367,47 @@ if False:
     plt.savefig('1d_burgers_equation.png')
     plt.show()
     plt.close()
-    
+
+
+#
+# ME565 Lec - 27
+#
+
+if False:
+    # image
+    img = PIL.Image.open('axial_mri.jpg').convert('L')  # gray image
+    wid, hei = img.size         # width, height
+    img_np = np.array(img)      # numpy
+    rows, cols = img_np.shape   # rows, columns
+    output_format = 'width/height=%i/%i > rows/cols=%i/%i'
+    print(output_format % (wid, hei, rows, cols))
+    # singular value decomposition
+    U, S, Vt = np.linalg.svd(img_np)
+    print('X.shape = ', img_np.shape)
+    print('U.shape = ', U.shape)
+    print('S.shape = ', S.shape)
+    print('Vt.shape = ', Vt.shape)
+    # approximation
+    S_diag = np.diag(S)
+    img_np_approx_5 = U[:,:5] @ S_diag[:5, :5] @ Vt[:5,:]
+    img_np_approx_20 = U[:,:20] @ S_diag[:20, :20] @ Vt[:20,:]
+    img_np_approx_100 = U[:,:100] @ S_diag[:100, :100] @ Vt[:100,:]
+    print('img_np_approx_5.shape = ', img_np_approx_5.shape)
+    print('img_np_approx_20.shape = ', img_np_approx_20.shape)
+    # visualization
+    fig, ax = plt.subplots(2, 2, figsize=(6,6))
+    ax[0,0].imshow(img_np)
+    ax[0,0].set_title('original')
+    ax[0,1].imshow(img_np_approx_5)
+    ax[0,1].set_title('SVD modes = %i (%.1f%%)' % (5, 5/873*100))
+    ax[1,0].imshow(img_np_approx_20)
+    ax[1,0].set_title('SVD modes = %i (%.1f%%)' % (20, 20/873*100))
+    ax[1,1].imshow(img_np_approx_100)
+    ax[1,1].set_title('SVD modes = %i (%.1f%%)' % (100, 100/873*100))
+    plt.tight_layout()
+    plt.savefig('SVD_axial_mri.png')
+    plt.show()
+    plt.close()
 
 
 
