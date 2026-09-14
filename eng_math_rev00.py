@@ -1389,23 +1389,35 @@ if False:
     print('Vt.shape = ', Vt.shape)
     # approximation
     S_diag = np.diag(S)
-    img_np_approx_5 = U[:,:5] @ S_diag[:5, :5] @ Vt[:5,:]
-    img_np_approx_20 = U[:,:20] @ S_diag[:20, :20] @ Vt[:20,:]
+    S_cumsum = np.cumsum(S)
+    S_cumsum /= S_cumsum[-1]
+    img_np_approx_10 = U[:,:10] @ S_diag[:10, :10] @ Vt[:10,:]
+    img_np_approx_30 = U[:,:30] @ S_diag[:30, :30] @ Vt[:30,:]
     img_np_approx_100 = U[:,:100] @ S_diag[:100, :100] @ Vt[:100,:]
-    print('img_np_approx_5.shape = ', img_np_approx_5.shape)
-    print('img_np_approx_20.shape = ', img_np_approx_20.shape)
+    print('img_np_approx_10.shape = ', img_np_approx_10.shape)
+    print('img_np_approx_30.shape = ', img_np_approx_30.shape)
     # visualization
-    fig, ax = plt.subplots(2, 2, figsize=(6,6))
-    ax[0,0].imshow(img_np)
-    ax[0,0].set_title('original')
-    ax[0,1].imshow(img_np_approx_5)
-    ax[0,1].set_title('SVD modes = %i (%.1f%%)' % (5, 5/873*100))
-    ax[1,0].imshow(img_np_approx_20)
-    ax[1,0].set_title('SVD modes = %i (%.1f%%)' % (20, 20/873*100))
-    ax[1,1].imshow(img_np_approx_100)
-    ax[1,1].set_title('SVD modes = %i (%.1f%%)' % (100, 100/873*100))
+    mosaic = [ ['A', 'B', 'E'] , ['C', 'D', 'F'] ]
+    fig, ax_dict = plt.subplot_mosaic(mosaic, figsize=(10,6))
+    ax_dict['A'].imshow(img_np)
+    ax_dict['A'].set_title('original')
+    ax_dict['B'].imshow(img_np_approx_10)
+    ax_dict['B'].set_title('SVD r <= %i (%.1f%%)' % (10, S_cumsum[10]*1e2))
+    ax_dict['C'].imshow(img_np_approx_30)
+    ax_dict['C'].set_title('SVD r <= %i (%.1f%%)' % (30, S_cumsum[30]*1e2))
+    ax_dict['D'].imshow(img_np_approx_100)
+    ax_dict['D'].set_title('SVD r <= %i (%.1f%%)' % (100, S_cumsum[100]*1e2))
+    ax_dict['E'].semilogy(S, 'r:.')
+    ax_dict['E'].grid(ls=':')
+    ax_dict['E'].set_xlabel('SVD mode')
+    ax_dict['E'].set_ylabel('singular value')
+    ax_dict['F'].plot(S_cumsum/S_cumsum[-1], 'r:.')
+    ax_dict['F'].grid(ls=':')
+    ax_dict['F'].set_xlabel('SVD mode')
+    ax_dict['F'].set_ylabel('Cumulative energy')
+    ax_dict['F'].set_ylim(0.0, 1.0)
     plt.tight_layout()
-    plt.savefig('SVD_axial_mri.png')
+    plt.savefig('SVD_axial_mri2.png')
     plt.show()
     plt.close()
 
