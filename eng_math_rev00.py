@@ -8,7 +8,9 @@
 #
 
 
-import time
+import os, sys, time
+from pympler import asizeof
+
 import numpy as np
 import scipy as sc
 import sympy as sy
@@ -1422,7 +1424,86 @@ if False:
     plt.close()
 
 
+#
+# ME565 Lec - 28
+#
 
+if False:
+    # SVD
+    x = 3                                       # slope
+    a = np.linspace(-2.0, 2.0, 17)              # domain
+    rng = np.random.default_rng(seed=2)         
+    b = a*x + rng.normal(size=a.size)           
+    #
+    a = np.vstack((a, a)).T
+    b = np.vstack((b, b)).T
+    U, S, Vt = np.linalg.svd(a, full_matrices=False)
+    S = np.diag(S)
+    print(a.shape, b.shape)
+    print(U.shape, S.shape, Vt.shape)
+    x_ = Vt.T @ np.linalg.inv(S) @ U.T @ b
+    print(x_.shape)
+    print(x_)
+    # visualization
+    fig, ax = plt.subplots(1, 1, figsize=(6,6))
+    ax.plot(a[:,0], (x*a)[:,0], 'ko-', linewidth=1.5, label='input')
+    ax.plot(a[:,0], b[:,0], 'rx', linewidth=1.5, label='input w/ noise')
+    ax.grid(ls=':')
+    ax.legend(fontsize=10)
+    plt.tight_layout()
+    plt.show()
+    plt.close()
+
+if False:
+    # accessing to downloaded data from ccr.cancer.gov
+    ovarian_data = {}
+    # step 1
+    tg_dir = ''
+    result = os.scandir('.')
+    for each_item in result:
+        if each_item.is_dir():
+            if 'ovarian' in each_item.name.lower():
+                tg_dir = each_item.name
+                print('TG dir = %s' % tg_dir)
+    os.chdir(tg_dir)
+    # step 2 > detection
+    result = os.scandir('.')
+    for each_item in result:
+        if each_item.is_dir():
+            ovarian_data[each_item.name] = []
+            print(' detection = %s' % each_item.name)
+    # step 3 > data
+    for each_index, each_detection in enumerate(ovarian_data.keys()):
+        # change directory
+        if each_index == 0:
+            os.chdir(each_detection)
+        else:
+            os.chdir('..')
+            os.chdir(each_detection)
+        #
+        result = os.scandir('.')
+        for each_index, each_item in enumerate(result):
+            if each_item.is_file():
+                #
+                each_data = [ [], [] ]
+                fid = open(each_item.name,'r')
+                for each_line in fid:
+                    each_line_sep = each_line[:-1].split('\t')
+                    each_data[0].append(float(each_line_sep[0]))
+                    each_data[1].append(float(each_line_sep[1]))
+                fid.close()
+                ovarian_data[each_detection].append(np.array( np.array(each_data).T ))
+                #
+                print('  data of %s = %s (%i, %s, %iKB)' % \
+                      (each_detection, each_item.name, each_index,
+                       ovarian_data[each_detection][-1].shape,
+                       ovarian_data[each_detection][-1].size/1024))
+        
+    print(' size of ovarian_data = %iMB' % (asizeof.asizeof(ovarian_data)/1024/1024)) 
+
+
+
+    
 
 
 
